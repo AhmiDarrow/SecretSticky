@@ -511,7 +511,9 @@ fn open_url_in_browser(url: &str) -> AppResult<()> {
     #[cfg(not(windows))]
     {
         let _ = url;
-        Err(AppError::Message("open url unsupported on this platform".into()))
+        Err(AppError::Message(
+            "open url unsupported on this platform".into(),
+        ))
     }
 }
 
