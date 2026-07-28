@@ -28,6 +28,9 @@ desktop.ini
 *.pdb
 src-tauri/WixTools/
 src-tauri/gen/schemas/
+# Windows-only product — drop mobile icon trees from `tauri icon`
+src-tauri/icons/android/
+src-tauri/icons/ios/
 
 # App data (never commit a real vault)
 vault.json

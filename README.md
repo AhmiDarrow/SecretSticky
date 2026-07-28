@@ -9,6 +9,10 @@ Use it for API keys, passwords, recovery codes, and anything you would not trust
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://github.com/AhmiDarrow/SecretSticky/releases)
 
 <p align="center">
+  <img src="src-tauri/icons/128x128.png" alt="SecretSticky icon" width="96" height="96" />
+</p>
+
+<p align="center">
   <strong>Local-only · Master password · Multi-window stickies · System tray</strong>
 </p>
 

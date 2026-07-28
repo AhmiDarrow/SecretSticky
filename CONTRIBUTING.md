@@ -42,6 +42,19 @@ CI runs the same gates on `windows-latest`.
 | `src-tauri/src/vault.rs` | On-disk format + session |
 | `src-tauri/src/commands.rs` | Tauri IPC + window/tray ACL |
 | `.github/workflows/` | CI + release |
+| `app-icon.png` | Master 1024×1024 icon source |
+| `scripts/prepare_icon.py` | Rebuild public favicons from the master PNG |
+| `src-tauri/icons/` | Window / tray / installer icons (`npx tauri icon app-icon.png`) |
+
+### Regenerating icons
+
+```bash
+# After replacing app-icon.png (square PNG, ideally 1024×1024):
+python scripts/prepare_icon.py
+npx tauri icon app-icon.png -o src-tauri/icons
+# Drop mobile trees if generated (Windows-only product):
+# remove src-tauri/icons/android and src-tauri/icons/ios
+```
 
 ## Security expectations
 
