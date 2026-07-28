@@ -7,10 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-07-28
+
+### Added
+
+- In-app **About** panel: “Hi I'm Ahmi, hope this helps!” with links to the [GitHub profile](https://github.com/AhmiDarrow), project repo, and Releases (allowlisted `open_external_url`)
+- Brand mark on unlock/setup and manager header
+- **Auto-update** from GitHub Releases (signed minisign artifacts + `latest.json`); About → **Check for updates** / install & restart
+- Version label in About (from the running binary)
+
+### Fixed
+
+- Brand icon applied on **every** window (manager + stickies), tray, installer, and shortcuts
+- Explicit window/taskbar icon set so WebView2 paths no longer fall back to the old default mark
+- NSIS installer uses the sticky+lock ICO for setup UI and installed shortcuts
+- Re-apply window title + icon when showing the manager from tray
+- Version surfaces aligned (`package.json`, `tauri.conf.json`, `Cargo.toml`)
+
 ### Changed
 
 - App icon: yellow sticky + padlock (window, tray, installer ICO/PNG set)
 - Webview favicon uses bundled PNG instead of default Vite mark
+- Release workflow signs updater payloads and publishes updater JSON alongside NSIS/MSI
 
 ## [0.1.0] — 2026-07-28
 

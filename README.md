@@ -34,6 +34,8 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 | **UX** | Close manager → tray; open a sticky → manager tucks away; Inter font (self-hosted) |
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |
 | **Idle** | Auto-lock after inactivity (default 15 minutes) |
+| **Updates** | Signed auto-update from GitHub Releases (About → Check for updates) |
+| **About** | “Hi I'm Ahmi, hope this helps!” + profile / repo links |
 
 ## Install
 
@@ -42,6 +44,10 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 Download the latest Windows installer from  
 **[Releases](https://github.com/AhmiDarrow/SecretSticky/releases/latest)**  
 (NSIS `.exe` setup; MSI when available).
+
+The NSIS installer creates **Start Menu** and **Desktop** shortcuts that use the sticky+lock icon (same mark as the taskbar and tray).
+
+Installed builds can update themselves: **About → Check for updates** downloads the next signed release from GitHub and restarts the app.
 
 ### From source
 
@@ -117,24 +123,43 @@ npm run build         # Vite production bundle only
 ## CI & releases
 
 - **CI** (`.github/workflows/ci.yml`) — on push/PR to `main`: frontend tests + Vite build, Rust fmt + tests (Windows).
-- **Release** (`.github/workflows/release.yml`) — on tag `v*` (or manual dispatch): test gate, then Tauri NSIS/MSI, draft GitHub Release.
+- **Release** (`.github/workflows/release.yml`) — on tag `v*` (or manual dispatch): test gate, then signed Tauri NSIS/MSI + updater `latest.json`, draft GitHub Release.
 
 ```bash
 # After bumping version in package.json, Cargo.toml, tauri.conf.json + CHANGELOG
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
+
+Requires repo secret `TAURI_SIGNING_PRIVATE_KEY` (see CONTRIBUTING).
 
 ## Stack
 
 - **Tauri 2** + **React 19** + **TypeScript** + **Vite**
 - **Rust:** `argon2`, `chacha20poly1305`, `zeroize`, `serde`
+- **Updates:** `tauri-plugin-updater` + `tauri-plugin-process` (signed GitHub Releases)
+
+## Auto-update
+
+Release builds ship with the Tauri updater plugin:
+
+1. CI signs NSIS/MSI updater artifacts with a minisign key (`TAURI_SIGNING_PRIVATE_KEY` repo secret).
+2. Each release publishes `latest.json` next to the installers.
+3. The app polls `…/releases/latest/download/latest.json`, verifies the signature with the **public** key embedded in the binary, then installs (About → Check for updates).
+
+Dev (`tauri dev`) has no installer channel — use a packaged build to exercise updates.
+
+## About
+
+Hi I'm Ahmi, hope this helps!
+
+- GitHub: [github.com/AhmiDarrow](https://github.com/AhmiDarrow)
+- This project: [AhmiDarrow/SecretSticky](https://github.com/AhmiDarrow/SecretSticky)
+- Releases: [github.com/AhmiDarrow/SecretSticky/releases](https://github.com/AhmiDarrow/SecretSticky/releases)
+
+SecretSticky is a small, local-first Windows app for people who live in sticky notes but need real at-rest encryption for API keys and passwords. Built with Tauri so the UI stays light and the crypto stays in Rust.
 
 ## License
 
 [MIT](LICENSE) © Ahmi Darrow
-
-## About
-
-SecretSticky is a small, local-first Windows app for people who live in sticky notes but need real at-rest encryption for API keys and passwords. Built with Tauri so the UI stays light and the crypto stays in Rust.
 

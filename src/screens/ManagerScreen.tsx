@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { clearClipboard } from "../clipboard";
 import { COLORS, type NotePreviewDto } from "../types";
+import {
+  checkForAppUpdate,
+  downloadAndInstallUpdate,
+} from "../updater";
+import appMark from "../assets/app-mark.png";
+
+const GITHUB_PROFILE = "https://github.com/AhmiDarrow";
+const GITHUB_REPO = "https://github.com/AhmiDarrow/SecretSticky";
+const GITHUB_RELEASES = "https://github.com/AhmiDarrow/SecretSticky/releases";
 
 interface Props {
   onLock: () => void | Promise<void>;
@@ -14,10 +24,15 @@ export function ManagerScreen({ onLock }: Props) {
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string>("…");
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [pendingVersion, setPendingVersion] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -31,6 +46,9 @@ export function ManagerScreen({ onLock }: Props) {
 
   useEffect(() => {
     refresh();
+    void getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion("0.1.2"));
     let unlisten: (() => void) | undefined;
     listen("notes-changed", () => {
       refresh();
@@ -39,6 +57,48 @@ export function ManagerScreen({ onLock }: Props) {
     });
     return () => unlisten?.();
   }, [refresh]);
+
+  const runUpdateCheck = async () => {
+    setUpdateBusy(true);
+    setUpdateMsg(null);
+    setPendingVersion(null);
+    try {
+      const result = await checkForAppUpdate();
+      if (result.kind === "up-to-date") {
+        setUpdateMsg(`You're on the latest version (${appVersion}).`);
+      } else if (result.kind === "available") {
+        setPendingVersion(result.version);
+        setUpdateMsg(`Update ${result.version} is ready to install.`);
+      } else {
+        setUpdateMsg(result.message);
+      }
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const runUpdateInstall = async () => {
+    setUpdateBusy(true);
+    setUpdateMsg("Downloading update…");
+    try {
+      const ok = await downloadAndInstallUpdate((pct) => {
+        if (pct == null) {
+          setUpdateMsg("Downloading update…");
+        } else {
+          setUpdateMsg(`Downloading update… ${pct}%`);
+        }
+      });
+      if (!ok) {
+        setUpdateMsg(`You're on the latest version (${appVersion}).`);
+        setPendingVersion(null);
+      }
+      // relaunch() exits the process on success
+    } catch (e) {
+      setUpdateMsg(String(e));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
 
   const create = (color?: string) => {
     // Fire-and-forget: Rust returns after vault write; sticky window opens async.
@@ -97,16 +157,37 @@ export function ManagerScreen({ onLock }: Props) {
   return (
     <div className="manager">
       <header className="manager-header">
-        <div>
-          <h1>SecretSticky</h1>
-          <p className="muted">Encrypted sticky notes</p>
+        <div className="brand-block">
+          <img
+            className="brand-mark"
+            src={appMark}
+            width={40}
+            height={40}
+            alt=""
+            draggable={false}
+          />
+          <div>
+            <h1>SecretSticky</h1>
+            <p className="muted">Encrypted sticky notes</p>
+          </div>
         </div>
         <div className="header-actions">
           <button
             type="button"
             onClick={() => {
+              setShowAbout((v) => !v);
+              if (!showAbout) setShowPassword(false);
+            }}
+            disabled={busy}
+          >
+            About
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               setShowPassword((v) => !v);
               setPwMsg(null);
+              if (!showPassword) setShowAbout(false);
             }}
             disabled={busy}
           >
@@ -124,6 +205,110 @@ export function ManagerScreen({ onLock }: Props) {
           </button>
         </div>
       </header>
+
+      {showAbout && (
+        <section className="about-panel" aria-label="About SecretSticky">
+          <div className="about-row">
+            <img
+              className="about-mark"
+              src={appMark}
+              width={56}
+              height={56}
+              alt="SecretSticky"
+              draggable={false}
+            />
+            <div>
+              <h2>About</h2>
+              <p className="about-hello">Hi I&apos;m Ahmi, hope this helps!</p>
+              <p className="muted fine-inline">
+                Local-only encrypted sticky notes for Windows. MIT licensed.
+              </p>
+              <p className="muted fine-inline about-version">
+                Version {appVersion}
+              </p>
+              <div className="about-links">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    void api.openExternalUrl(GITHUB_PROFILE).catch((e) =>
+                      setError(String(e)),
+                    );
+                  }}
+                >
+                  GitHub profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void api.openExternalUrl(GITHUB_REPO).catch((e) =>
+                      setError(String(e)),
+                    );
+                  }}
+                >
+                  Project repo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void api.openExternalUrl(GITHUB_RELEASES).catch((e) =>
+                      setError(String(e)),
+                    );
+                  }}
+                >
+                  Releases
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setShowAbout(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="about-update">
+                <button
+                  type="button"
+                  disabled={busy || updateBusy}
+                  onClick={() => {
+                    void runUpdateCheck();
+                  }}
+                >
+                  {updateBusy && !pendingVersion
+                    ? "Checking…"
+                    : "Check for updates"}
+                </button>
+                {pendingVersion && (
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={busy || updateBusy}
+                    onClick={() => {
+                      void runUpdateInstall();
+                    }}
+                  >
+                    {updateBusy
+                      ? "Installing…"
+                      : `Install ${pendingVersion} & restart`}
+                  </button>
+                )}
+              </div>
+              {updateMsg && (
+                <p
+                  className={
+                    updateMsg.startsWith("You're on") ||
+                    updateMsg.startsWith("Update ")
+                      ? "ok fine-inline"
+                      : "error fine-inline"
+                  }
+                >
+                  {updateMsg}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {showPassword && (
         <section className="password-panel">

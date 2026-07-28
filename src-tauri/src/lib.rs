@@ -36,6 +36,8 @@ pub fn run() {
     let vault = VaultState::new().expect("failed to open vault store");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(vault)
         .invoke_handler(tauri::generate_handler![
             vault_status,
@@ -57,6 +59,7 @@ pub fn run() {
             show_main,
             hide_main,
             quit_app,
+            open_external_url,
         ])
         .setup(|app| {
             let new_i = MenuItem::with_id(app, "new", "New note", true, None::<&str>)?;
@@ -67,15 +70,22 @@ pub fn run() {
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&new_i, &show_i, &open_all_i, &lock_i, &quit_i])?;
 
+            // Brand icon for tray + any window that missed the PE resource default.
             let icon = app
                 .default_window_icon()
                 .cloned()
                 .unwrap_or_else(|| Image::new_owned(vec![0; 4], 1, 1));
 
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.set_icon(icon.clone());
+                let _ = main.set_title("SecretSticky");
+            }
+
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
+                .icon_as_template(false)
                 .menu(&menu)
-                .tooltip("SecretSticky — tray (click to show manager)")
+                .tooltip("SecretSticky — encrypted sticky notes")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "new" => {
                         let unlocked = app

@@ -77,7 +77,15 @@ Conventional commits preferred:
 1. Bump version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` together
 2. Update `CHANGELOG.md`
 3. Merge to `main` with green CI
-4. Tag `vX.Y.Z` and push — **Release** workflow builds Windows installers and opens a draft GitHub Release
+4. Ensure repo secret **`TAURI_SIGNING_PRIVATE_KEY`** is set (minisign private key matching the public key in `tauri.conf.json` → `plugins.updater.pubkey`). Optional password: `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+5. Tag `vX.Y.Z` and push — **Release** workflow builds Windows NSIS/MSI, signs updater artifacts, publishes `latest.json`, and opens a draft GitHub Release
+
+```bash
+# One-time keygen (store private key only in GitHub secrets / offline backup)
+npx tauri signer generate -w ~/.tauri/secretsticky.key
+# Public key → tauri.conf.json plugins.updater.pubkey
+# Private key → gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/secretsticky.key
+```
 
 ## License
 

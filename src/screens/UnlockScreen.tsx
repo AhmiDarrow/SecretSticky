@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { copySecret } from "../clipboard";
 import type { VaultStatus } from "../types";
+import appMark from "../assets/app-mark.png";
 
 interface Props {
   status: VaultStatus;
@@ -51,7 +52,9 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
     return (
       <div className="gate">
         <div className="gate-card">
-          <div className="logo-mark">S</div>
+          <div className="logo-mark" aria-hidden>
+            <img src={appMark} alt="" width={44} height={44} draggable={false} />
+          </div>
           <h1>Save your recovery key</h1>
           <p className="muted">
             This is shown <strong>once</strong>. Store it offline. Losing both
@@ -92,7 +95,9 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
   return (
     <div className="gate">
       <div className="gate-card">
-        <div className="logo-mark">S</div>
+        <div className="logo-mark" aria-hidden>
+          <img src={appMark} alt="" width={44} height={44} draggable={false} />
+        </div>
         <h1>{isSetup ? "Create your vault" : "Unlock SecretSticky"}</h1>
         <p className="muted">
           {isSetup

@@ -455,6 +455,10 @@ pub fn change_password(
 #[tauri::command]
 pub fn show_main(app: AppHandle) -> AppResult<()> {
     if let Some(main) = app.get_webview_window("main") {
+        if let Some(icon) = app.default_window_icon() {
+            let _ = main.set_icon(icon.clone());
+        }
+        let _ = main.set_title("SecretSticky");
         let _ = main.show();
         let _ = main.unminimize();
         let _ = main.set_focus();
@@ -472,6 +476,43 @@ pub fn hide_main(app: AppHandle) -> AppResult<()> {
 pub fn quit_app(app: AppHandle) -> AppResult<()> {
     crate::request_quit(&app);
     Ok(())
+}
+
+/// Allowlisted external links only (About → GitHub). No free-form URLs from the webview.
+const ALLOWED_EXTERNAL_URLS: &[&str] = &[
+    "https://github.com/AhmiDarrow",
+    "https://github.com/AhmiDarrow/SecretSticky",
+    "https://github.com/AhmiDarrow/SecretSticky/releases",
+    "https://github.com/AhmiDarrow/SecretSticky/issues",
+];
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> AppResult<()> {
+    let trimmed = url.trim();
+    if !ALLOWED_EXTERNAL_URLS.contains(&trimmed) {
+        return Err(AppError::Message("url not allowed".into()));
+    }
+    open_url_in_browser(trimmed)
+}
+
+fn open_url_in_browser(url: &str) -> AppResult<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW — avoid a flashing console when launching the browser.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| AppError::Message(format!("open url: {e}")))?;
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err(AppError::Message("open url unsupported on this platform".into()))
+    }
 }
 
 pub fn hide_main_window(app: &AppHandle) {
@@ -606,7 +647,7 @@ fn open_note_window(app: &AppHandle, note: &NoteDto) -> AppResult<()> {
         b = bg_b
     );
 
-    let builder = WebviewWindowBuilder::new(app, &label, url)
+    let mut builder = WebviewWindowBuilder::new(app, &label, url)
         .title(if note.title.trim().is_empty() {
             "Sticky note".into()
         } else {
@@ -624,10 +665,21 @@ fn open_note_window(app: &AppHandle, note: &NoteDto) -> AppResult<()> {
         .initialization_script(&init_script)
         .background_color(color_to_rgba(&note.color));
 
+    // Force brand icon on every sticky (taskbar / Alt-Tab) — do not rely on
+    // process default alone; some WebView2 paths still showed the old mark.
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder
+            .icon(icon.clone())
+            .map_err(|e| AppError::Message(format!("window icon: {e}")))?;
+    }
+
     let window = builder
         .build()
         .map_err(|e| AppError::Message(format!("window: {e}")))?;
 
+    if let Some(icon) = app.default_window_icon() {
+        let _ = window.set_icon(icon.clone());
+    }
     let _ = window.set_background_color(Some(color_to_rgba(&note.color)));
     let _ = window.show();
     let _ = window.set_focus();

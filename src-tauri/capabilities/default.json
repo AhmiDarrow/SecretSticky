@@ -24,6 +24,9 @@
     "core:window:allow-set-background-color",
     "core:webview:allow-set-webview-focus",
     "core:event:default",
-    "core:tray:default"
+    "core:tray:default",
+    "updater:default",
+    "process:allow-restart",
+    "process:allow-exit"
   ]
 }

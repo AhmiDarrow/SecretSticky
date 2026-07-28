@@ -42,4 +42,5 @@ export const api = {
   showMain: () => invoke<void>("show_main"),
   hideMain: () => invoke<void>("hide_main"),
   quitApp: () => invoke<void>("quit_app"),
+  openExternalUrl: (url: string) => invoke<void>("open_external_url", { url }),
 };

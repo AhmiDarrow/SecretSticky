@@ -131,7 +131,11 @@ export default function App() {
     return (
       <div className={noteId ? "note-shell" : "boot"}>
         <div className={noteId ? "pad muted" : "boot-card"}>
-          {!noteId && <div className="logo-mark">S</div>}
+          {!noteId && (
+            <div className="logo-mark" aria-hidden>
+              S
+            </div>
+          )}
           <p>{noteId ? "Loading note…" : "Loading SecretSticky…"}</p>
           {error && <p className="error">{error}</p>}
         </div>

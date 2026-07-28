@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build (e.g. v0.1.0). Leave empty to use package version."
+        description: "Release tag to build (e.g. v0.1.2). Leave empty to use package version."
         required: false
         default: ""
 
@@ -51,10 +51,22 @@ jobs:
           npm test
           cargo test --manifest-path src-tauri/Cargo.toml
 
-      - name: Build Tauri (NSIS + MSI)
+      - name: Require updater signing key
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing repo secret TAURI_SIGNING_PRIVATE_KEY (minisign private key for updater artifacts)."
+            echo "Generate with: npx tauri signer generate -w ~/.tauri/secretsticky.key"
+            echo "Then: gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/secretsticky.key"
+            exit 1
+          fi
+
+      - name: Build Tauri (NSIS + MSI + updater)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
           releaseName: "SecretSticky ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}"
@@ -63,9 +75,14 @@ jobs:
 
             Encrypted sticky notes for Windows — Sticky Notes feel, secrets safe at rest.
 
+            Hi I'm Ahmi, hope this helps!
+            - Profile: https://github.com/AhmiDarrow
+            - Repo: https://github.com/AhmiDarrow/SecretSticky
+
             ### Install
-            - Prefer the **NSIS setup** (`.exe`) for a normal Windows install.
+            - Prefer the **NSIS setup** (`.exe`) for a normal Windows install (desktop shortcut + Start Menu + taskbar icon).
             - MSI is also attached when available.
+            - Installed builds check **GitHub Releases** for signed updates (About → Check for updates).
 
             ### Notes
             - Local-only vault under `%APPDATA%\SecretSticky`
@@ -75,4 +92,6 @@ jobs:
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) and the README threat model.
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
           args: --bundles nsis,msi

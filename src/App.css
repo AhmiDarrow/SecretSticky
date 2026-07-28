@@ -149,12 +149,91 @@ button.ghost {
   background: linear-gradient(145deg, #fbbf24, #f59e0b);
   color: #1a1b1e;
   margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.logo-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  user-select: none;
 }
 
 .gate-card h1,
 .manager-header h1 {
   margin: 0 0 0.35rem;
   font-size: 1.35rem;
+}
+
+.about-panel {
+  margin: 0.75rem 1.1rem 0;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.about-panel h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.about-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+}
+
+.about-mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+
+.about-hello {
+  margin: 0 0 0.35rem;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.about-version {
+  margin: 0.15rem 0 0.45rem;
+}
+
+.about-update {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.65rem;
 }
 
 .gate-form {
