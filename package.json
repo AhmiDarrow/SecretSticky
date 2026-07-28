@@ -1,0 +1,46 @@
+{
+  "name": "secretsticky",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Encrypted sticky notes for Windows — Sticky Notes feel, secrets safe at rest.",
+  "author": "Ahmi Darrow",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AhmiDarrow/SecretSticky.git"
+  },
+  "homepage": "https://github.com/AhmiDarrow/SecretSticky",
+  "bugs": {
+    "url": "https://github.com/AhmiDarrow/SecretSticky/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "test": "tsc --noEmit && vitest run",
+    "test:watch": "vitest",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:all": "npm test && npm run test:rust"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@tauri-apps/api": "^2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "vitest": "^3.2.4"
+  }
+}
