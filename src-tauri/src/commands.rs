@@ -5,6 +5,11 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use crate::error::{AppError, AppResult};
 use crate::vault::{NoteColor, NoteDto, NotePreviewDto, VaultState, VaultStatus};
 
+/// Smallest sticky outer/inner size users may resize to (whole outcomes from live measure).
+pub(crate) const NOTE_MIN_WIDTH: f64 = 345.0;
+pub(crate) const NOTE_MIN_HEIGHT: f64 = 250.0;
+const NOTE_MAX_SIZE: f64 = 900.0;
+
 /// Note window labels are `note-{uuid}`. Extract the uuid for ACL checks.
 pub(crate) fn note_id_from_label(label: &str) -> Option<&str> {
     label.strip_prefix("note-")
@@ -608,8 +613,9 @@ fn open_note_window(app: &AppHandle, note: &NoteDto) -> AppResult<()> {
     } else {
         (note.x, note.y)
     };
-    let width = note.width.clamp(220.0, 900.0);
-    let height = note.height.clamp(180.0, 900.0);
+    // Whole-pixel min from live sticky measure (~343×247) → 345×250.
+    let width = note.width.clamp(NOTE_MIN_WIDTH, NOTE_MAX_SIZE);
+    let height = note.height.clamp(NOTE_MIN_HEIGHT, NOTE_MAX_SIZE);
 
     let id_js = note.id.replace('\\', "\\\\").replace('\'', "\\'");
     let (bg_r, bg_g, bg_b) = match &note.color {
@@ -656,6 +662,7 @@ fn open_note_window(app: &AppHandle, note: &NoteDto) -> AppResult<()> {
             note.title.clone()
         })
         .inner_size(width, height)
+        .min_inner_size(NOTE_MIN_WIDTH, NOTE_MIN_HEIGHT)
         .position(x, y)
         .resizable(true)
         .decorations(false)

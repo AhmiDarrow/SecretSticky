@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-07-28
+
+### Added
+
+- In-app **delete confirmation** modal (no browser `localhost says` dialog)
+- Manager **About** layout polish: equal link chips, update row, Close footer
+
+### Changed
+
+- Manager default window size **440×560** (min 400×500)
+- Sticky note minimum size **345×250** (resize floor + create/open/geometry clamps)
+- New stickies default **345×280** (min width, slightly taller for typing)
+- Manager chrome: two-row header, stacked footer, delete control inside note rows
+- Note list scrolls independently so header/footer stay put
+
+### Fixed
+
+- Header/footer wrap and cramped toolbar at manager width
+- About panel button salad / uneven blocks
+- Detached note-row delete control
+
 ## [0.1.2] — 2026-07-28
 
 ### Added

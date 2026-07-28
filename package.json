@@ -1,7 +1,7 @@
 {
   "name": "secretsticky",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Encrypted sticky notes for Windows — Sticky Notes feel, secrets safe at rest. Hi I'm Ahmi, hope this helps!",
   "author": "Ahmi Darrow <https://github.com/AhmiDarrow>",
   "license": "MIT",

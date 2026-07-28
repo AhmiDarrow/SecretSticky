@@ -563,8 +563,9 @@ impl Vault {
             color: color.unwrap_or_default(),
             x: 120.0,
             y: 120.0,
-            width: 280.0,
-            height: 260.0,
+            // Match sticky min floor (345×250); slightly taller default for typing room.
+            width: 345.0,
+            height: 280.0,
             always_on_top: true,
             created_at: now,
             updated_at: now,
@@ -613,10 +614,11 @@ impl Vault {
                 meta.y = v;
             }
             if let Some(v) = width {
-                meta.width = v;
+                // Keep vault geometry at/above sticky min (345×250).
+                meta.width = v.clamp(345.0, 900.0);
             }
             if let Some(v) = height {
-                meta.height = v;
+                meta.height = v.clamp(250.0, 900.0);
             }
             if let Some(v) = always_on_top {
                 meta.always_on_top = v;

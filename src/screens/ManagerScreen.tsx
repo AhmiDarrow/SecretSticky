@@ -25,6 +25,8 @@ export function ManagerScreen({ onLock }: Props) {
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<NotePreviewDto | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -154,6 +156,21 @@ export function ManagerScreen({ onLock }: Props) {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteNote(deleteTarget.id);
+      setDeleteTarget(null);
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="manager">
       <header className="manager-header">
@@ -166,7 +183,7 @@ export function ManagerScreen({ onLock }: Props) {
             alt=""
             draggable={false}
           />
-          <div>
+          <div className="brand-text">
             <h1>SecretSticky</h1>
             <p className="muted">Encrypted sticky notes</p>
           </div>
@@ -176,7 +193,10 @@ export function ManagerScreen({ onLock }: Props) {
             type="button"
             onClick={() => {
               setShowAbout((v) => !v);
-              if (!showAbout) setShowPassword(false);
+              if (!showAbout) {
+                setShowPassword(false);
+                setDeleteTarget(null);
+              }
             }}
             disabled={busy}
           >
@@ -187,7 +207,10 @@ export function ManagerScreen({ onLock }: Props) {
             onClick={() => {
               setShowPassword((v) => !v);
               setPwMsg(null);
-              if (!showPassword) setShowAbout(false);
+              if (!showPassword) {
+                setShowAbout(false);
+                setDeleteTarget(null);
+              }
             }}
             disabled={busy}
           >
@@ -212,12 +235,12 @@ export function ManagerScreen({ onLock }: Props) {
             <img
               className="about-mark"
               src={appMark}
-              width={56}
-              height={56}
+              width={44}
+              height={44}
               alt="SecretSticky"
               draggable={false}
             />
-            <div>
+            <div className="about-body">
               <h2>About</h2>
               <p className="about-hello">Hi I&apos;m Ahmi, hope this helps!</p>
               <p className="muted fine-inline">
@@ -257,13 +280,6 @@ export function ManagerScreen({ onLock }: Props) {
                   }}
                 >
                   Releases
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setShowAbout(false)}
-                >
-                  Close
                 </button>
               </div>
               <div className="about-update">
@@ -305,6 +321,18 @@ export function ManagerScreen({ onLock }: Props) {
                   {updateMsg}
                 </p>
               )}
+              <div className="about-footer">
+                <span className="muted fine-inline about-footer-meta">
+                  Local vault · no cloud
+                </span>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setShowAbout(false)}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -376,22 +404,24 @@ export function ManagerScreen({ onLock }: Props) {
       )}
 
       <section className="new-row">
-        <span className="label">New note</span>
-        <div className="swatches" aria-label="Note colors">
-          {COLORS.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={`swatch${c.dark ? " dark-swatch" : ""}`}
-              title={c.label}
-              aria-label={`New ${c.label} note`}
-              style={{ background: c.css }}
-              disabled={busy}
-              onClick={() => create(c.id)}
-            />
-          ))}
+        <div className="new-row-main">
+          <span className="label">New note</span>
+          <div className="swatches" aria-label="Note colors">
+            {COLORS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`swatch${c.dark ? " dark-swatch" : ""}`}
+                title={c.label}
+                aria-label={`New ${c.label} note`}
+                style={{ background: c.css }}
+                disabled={busy}
+                onClick={() => create(c.id)}
+              />
+            ))}
+          </div>
         </div>
-        {creating && <span className="muted fine-inline">Opening sticky…</span>}
+        {creating && <span className="muted fine-inline new-row-status">Opening sticky…</span>}
       </section>
 
       {error && <p className="error pad">{error}</p>}
@@ -424,16 +454,13 @@ export function ManagerScreen({ onLock }: Props) {
             </button>
             <button
               type="button"
-              className="ghost danger"
-              title="Delete"
-              onClick={async () => {
-                if (!confirm("Delete this note permanently?")) return;
-                try {
-                  await api.deleteNote(n.id);
-                  await refresh();
-                } catch (e) {
-                  setError(String(e));
-                }
+              className="note-delete ghost danger"
+              title="Delete note"
+              aria-label={`Delete ${n.title.trim() || "Untitled note"}`}
+              onClick={() => {
+                setShowAbout(false);
+                setShowPassword(false);
+                setDeleteTarget(n);
               }}
             >
               ✕
@@ -447,9 +474,8 @@ export function ManagerScreen({ onLock }: Props) {
           <span>
             {notes.length} note{notes.length === 1 ? "" : "s"} · local vault
           </span>
-          <span className="muted">
-            X closes to tray · stickies hide manager · copy clears in 30s
-          </span>
+          <span className="muted">X → tray · stickies hide manager</span>
+          <span className="muted">Copy clears in 30s</span>
         </div>
         <div className="footer-actions">
           <button
@@ -478,6 +504,53 @@ export function ManagerScreen({ onLock }: Props) {
           </button>
         </div>
       </footer>
+
+      {deleteTarget && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!deleting) setDeleteTarget(null);
+          }}
+        >
+          <div
+            className="modal-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+            aria-describedby="delete-dialog-desc"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-dialog-title">Delete note?</h2>
+            <p id="delete-dialog-desc" className="muted fine-inline">
+              <strong className="modal-note-name">
+                {deleteTarget.title.trim() || "Untitled note"}
+              </strong>{" "}
+              will be removed permanently from the vault.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-solid"
+                disabled={deleting}
+                onClick={() => {
+                  void confirmDelete();
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

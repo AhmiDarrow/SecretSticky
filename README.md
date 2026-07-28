@@ -32,6 +32,7 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 | **Notes** | Multiple colored stickies (incl. black & dark green), always-on-top, high-contrast ink |
 | **Tray** | New note · Show manager · Open all · Lock · Quit |
 | **UX** | Close manager → tray; open a sticky → manager tucks away; Inter font (self-hosted) |
+| **Windows** | Manager default **440×560**; sticky min **345×250** (new notes **345×280**) |
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |
 | **Idle** | Auto-lock after inactivity (default 15 minutes) |
 | **Updates** | Signed auto-update from GitHub Releases (About → Check for updates) |
