@@ -22,7 +22,7 @@ Use it for API keys, passwords, recovery codes, and anything you would not trust
 
 Windows Sticky Notes is great for quick capture and terrible for secrets (plain local data, sync surface, no real vault). **SecretSticky** keeps the sticky UX and encrypts note titles and bodies on disk.
 
-## Features (v0.1)
+## Features
 
 | Area | Details |
 |------|---------|
@@ -128,8 +128,8 @@ npm run build         # Vite production bundle only
 
 ```bash
 # After bumping version in package.json, Cargo.toml, tauri.conf.json + CHANGELOG
-git tag v0.1.2
-git push origin v0.1.2
+git tag v<version>
+git push origin v<version>
 ```
 
 Requires repo secret `TAURI_SIGNING_PRIVATE_KEY` (see CONTRIBUTING).
