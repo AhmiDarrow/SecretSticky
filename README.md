@@ -157,6 +157,7 @@ Hi I'm Ahmi, hope this helps!
 - GitHub: [github.com/AhmiDarrow](https://github.com/AhmiDarrow)
 - This project: [AhmiDarrow/SecretSticky](https://github.com/AhmiDarrow/SecretSticky)
 - Releases: [github.com/AhmiDarrow/SecretSticky/releases](https://github.com/AhmiDarrow/SecretSticky/releases)
+- Support: [patreon.com/cw/AhmiDarrow](https://www.patreon.com/cw/AhmiDarrow) — thank you!
 
 SecretSticky is a small, local-first Windows app for people who live in sticky notes but need real at-rest encryption for API keys and passwords. Built with Tauri so the UI stays light and the crypto stays in Rust.
 
