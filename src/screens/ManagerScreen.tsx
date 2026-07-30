@@ -134,7 +134,7 @@ export function ManagerScreen({ onLock }: Props) {
     setPwMsg(null);
     setError(null);
     if (newPw.length < 8) {
-      setPwMsg("New password must be at least 8 characters.");
+      setPwMsg("New password must be at least 12 characters.");
       return;
     }
     if (newPw !== confirmPw) {

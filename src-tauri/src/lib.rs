@@ -38,6 +38,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Second launch focuses the existing manager instead of starting another process.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            let _ = show_main(app.clone());
+        }))
         .manage(vault)
         .invoke_handler(tauri::generate_handler![
             vault_status,
@@ -56,9 +60,9 @@ pub fn run() {
             notes_open_all,
             set_idle_lock_secs,
             change_password,
-            show_main,
-            hide_main,
-            quit_app,
+            show_main_cmd,
+            hide_main_cmd,
+            quit_app_cmd,
             open_external_url,
         ])
         .setup(|app| {
@@ -90,13 +94,12 @@ pub fn run() {
                     "new" => {
                         let unlocked = app
                             .state::<VaultState>()
-                            .0
+                            .vault
                             .lock()
                             .map(|v| v.status().unlocked)
                             .unwrap_or(false);
                         if unlocked {
-                            let _ =
-                                notes_create_from_tray(app.clone(), &*app.state::<VaultState>());
+                            let _ = notes_create_from_tray(app.clone(), &app.state::<VaultState>());
                         } else {
                             let _ = show_main(app.clone());
                         }
@@ -107,19 +110,19 @@ pub fn run() {
                     "open_all" => {
                         let unlocked = app
                             .state::<VaultState>()
-                            .0
+                            .vault
                             .lock()
                             .map(|v| v.status().unlocked)
                             .unwrap_or(false);
                         if unlocked {
                             let _ =
-                                notes_open_all_from_tray(app.clone(), &*app.state::<VaultState>());
+                                notes_open_all_from_tray(app.clone(), &app.state::<VaultState>());
                         } else {
                             let _ = show_main(app.clone());
                         }
                     }
                     "lock" => {
-                        let _ = vault_lock_from_tray(app, &*app.state::<VaultState>());
+                        let _ = vault_lock_from_tray(app, &app.state::<VaultState>());
                     }
                     "quit" => {
                         request_quit(app);
@@ -148,16 +151,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            match event {
-                WindowEvent::CloseRequested { api, .. } => {
-                    // Manager X → hide to tray (keep stickies + process alive).
-                    // Real exit is tray Quit only.
-                    if window.label() == "main" {
-                        api.prevent_close();
-                        let _ = window.hide();
-                    }
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Manager X → hide to tray (keep stickies + process alive).
+                // Real exit is tray Quit only.
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
-                _ => {}
             }
         })
         .build(tauri::generate_context!())

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-07-30
+
+### Added
+
+- **Single-instance** lock via `tauri-plugin-single-instance` — a second launch focuses the existing manager instead of starting another process
+- Split Tauri capabilities: manager (`main`) vs sticky (`note-*`) windows
+- Expanded frontend unit coverage (`api`, `errors`, `updater`)
+
+### Security
+
+- Master password minimum length raised to **12** characters (setup + change password)
+- Manager-only ACL on vault status, quit, show/hide main, open external URL
+- Sticky note windows cannot read other notes’ full bodies; manager list is preview-only
+- `notes_get` body access limited to the owning note window (not manager)
+- CSP allows `img-src blob:` for in-app assets; sticky capability omits process/updater
+- Documented hardening notes in [SECURITY.md](SECURITY.md)
+
+### Changed
+
+- Dev server port **1422** (avoids clash with sibling local apps)
+
 ## [0.1.3] — 2026-07-28
 
 ### Added

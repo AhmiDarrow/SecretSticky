@@ -31,7 +31,7 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 | **Keys** | Stable content key — change password without re-encrypting notes or killing recovery |
 | **Notes** | Multiple colored stickies (incl. black & dark green), always-on-top, high-contrast ink |
 | **Tray** | New note · Show manager · Open all · Lock · Quit |
-| **UX** | Close manager → tray; open a sticky → manager tucks away; Inter font (self-hosted) |
+| **UX** | Single instance (second launch focuses manager); close manager → tray; open a sticky → manager tucks away; Inter font (self-hosted) |
 | **Windows** | Manager default **440×560**; sticky min **345×250** (new notes **345×280**) |
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |
 | **Idle** | Auto-lock after inactivity (default 15 minutes) |
@@ -64,7 +64,7 @@ npm run tauri:build    # release installers under src-tauri/target/release/bundl
 
 ## Quick start
 
-1. Launch SecretSticky → create a master password (8+ characters).
+1. Launch SecretSticky → create a master password (12+ characters).
 2. **Save the recovery key offline** (shown once). Lost password + lost recovery = permanent data loss.
 3. Pick a color → sticky opens. Type secrets. Save indicator confirms disk write.
 4. Close the manager with **X** → app stays in the tray. Tray → **Quit** to exit fully.
@@ -149,6 +149,10 @@ Release builds ship with the Tauri updater plugin:
 3. The app polls `…/releases/latest/download/latest.json`, verifies the signature with the **public** key embedded in the binary, then installs (About → Check for updates).
 
 Dev (`tauri dev`) has no installer channel — use a packaged build to exercise updates.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the threat model, crypto details, and reporting vulnerabilities.
 
 ## About
 

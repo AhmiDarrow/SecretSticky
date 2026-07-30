@@ -3,12 +3,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::{AppError, AppResult};
-use crate::vault::{NoteColor, NoteDto, NotePreviewDto, VaultState, VaultStatus};
-
-/// Smallest sticky outer/inner size users may resize to (whole outcomes from live measure).
-pub(crate) const NOTE_MIN_WIDTH: f64 = 345.0;
-pub(crate) const NOTE_MIN_HEIGHT: f64 = 250.0;
-const NOTE_MAX_SIZE: f64 = 900.0;
+use crate::vault::{
+    sanitize_size, NoteColor, NoteDto, NotePreviewDto, VaultState, VaultStatus,
+    NOTE_DEFAULT_HEIGHT, NOTE_MAX_SIZE, NOTE_MIN_HEIGHT, NOTE_MIN_WIDTH,
+};
 
 /// Note window labels are `note-{uuid}`. Extract the uuid for ACL checks.
 pub(crate) fn note_id_from_label(label: &str) -> Option<&str> {
@@ -16,10 +14,20 @@ pub(crate) fn note_id_from_label(label: &str) -> Option<&str> {
 }
 
 /// Pure ACL: which window labels may read/update a given note id.
+/// Manager (`main`) may update metadata via notes_update but must not
+/// receive full note bodies (see `notes_get` — note windows only).
 pub(crate) fn note_access_allowed(window_label: &str, note_id: &str) -> bool {
     if window_label == "main" {
         return true;
     }
+    match note_id_from_label(window_label) {
+        Some(id) => id == note_id,
+        None => false,
+    }
+}
+
+/// Full body read is restricted to the matching sticky window only.
+pub(crate) fn note_body_access_allowed(window_label: &str, note_id: &str) -> bool {
     match note_id_from_label(window_label) {
         Some(id) => id == note_id,
         None => false,
@@ -64,9 +72,14 @@ fn ensure_manager_only(window: Option<&tauri::WebviewWindow>) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn vault_status(state: State<'_, VaultState>) -> AppResult<VaultStatus> {
+pub fn vault_status(
+    window: tauri::WebviewWindow,
+    state: State<'_, VaultState>,
+) -> AppResult<VaultStatus> {
+    // Manager-only: note windows must not probe vault metadata.
+    ensure_manager_only(Some(&window))?;
     let v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     Ok(v.status())
@@ -80,7 +93,7 @@ pub fn vault_setup(
 ) -> AppResult<String> {
     ensure_manager_only(Some(&window))?;
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     v.setup(&password)
@@ -93,11 +106,39 @@ pub fn vault_unlock(
     password: String,
 ) -> AppResult<()> {
     ensure_manager_only(Some(&window))?;
+    {
+        let mut throttle = state
+            .unlock_throttle
+            .lock()
+            .map_err(|e| AppError::Message(e.to_string()))?;
+        throttle.check()?;
+    }
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
-    v.unlock(&password)
+    match v.unlock(&password) {
+        Ok(()) => {
+            let mut throttle = state
+                .unlock_throttle
+                .lock()
+                .map_err(|e| AppError::Message(e.to_string()))?;
+            throttle.record_success();
+            Ok(())
+        }
+        Err(e) => {
+            let mut throttle = state
+                .unlock_throttle
+                .lock()
+                .map_err(|e| AppError::Message(e.to_string()))?;
+            let count = throttle.record_failure();
+            eprintln!(
+                "[throttle] vault_unlock failed ({} failures in window)",
+                count
+            );
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -107,11 +148,39 @@ pub fn vault_unlock_recovery(
     recovery_key: String,
 ) -> AppResult<()> {
     ensure_manager_only(Some(&window))?;
+    {
+        let mut throttle = state
+            .unlock_throttle
+            .lock()
+            .map_err(|e| AppError::Message(e.to_string()))?;
+        throttle.check()?;
+    }
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
-    v.unlock_with_recovery(&recovery_key)
+    match v.unlock_with_recovery(&recovery_key) {
+        Ok(()) => {
+            let mut throttle = state
+                .unlock_throttle
+                .lock()
+                .map_err(|e| AppError::Message(e.to_string()))?;
+            throttle.record_success();
+            Ok(())
+        }
+        Err(e) => {
+            let mut throttle = state
+                .unlock_throttle
+                .lock()
+                .map_err(|e| AppError::Message(e.to_string()))?;
+            let count = throttle.record_failure();
+            eprintln!(
+                "[throttle] vault_unlock_recovery failed ({} failures in window)",
+                count
+            );
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -121,7 +190,7 @@ pub fn vault_lock(
     state: State<'_, VaultState>,
 ) -> AppResult<()> {
     ensure_manager_only(Some(&window))?;
-    vault_lock_inner(&app, &*state)
+    vault_lock_inner(&app, &state)
 }
 
 /// Tray / internal lock (no webview window context).
@@ -134,7 +203,7 @@ fn vault_lock_inner(app: &AppHandle, state: &VaultState) -> AppResult<()> {
     std::thread::sleep(Duration::from_millis(120));
     {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.lock();
@@ -149,9 +218,14 @@ fn vault_lock_inner(app: &AppHandle, state: &VaultState) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn vault_touch(state: State<'_, VaultState>) -> AppResult<()> {
+pub fn vault_touch(window: tauri::WebviewWindow, state: State<'_, VaultState>) -> AppResult<()> {
+    // Only manager + note-* windows may refresh idle activity.
+    let label = window.label();
+    if label != "main" && !label.starts_with("note-") {
+        return Err(AppError::Message("unauthorized window".into()));
+    }
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     v.touch();
@@ -162,7 +236,7 @@ pub fn vault_touch(state: State<'_, VaultState>) -> AppResult<()> {
 pub fn vault_check_idle(app: AppHandle, state: State<'_, VaultState>) -> AppResult<bool> {
     let locked = {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.check_idle_lock()
@@ -186,7 +260,7 @@ pub fn notes_list(
 ) -> AppResult<Vec<NotePreviewDto>> {
     ensure_manager_only(Some(&window))?;
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     v.list_note_previews()
@@ -198,9 +272,14 @@ pub fn notes_get(
     state: State<'_, VaultState>,
     id: String,
 ) -> AppResult<NoteDto> {
-    ensure_note_window_acl(&window, &id)?;
+    // Bodies only for the matching sticky — not the manager (preview list only).
+    if !note_body_access_allowed(window.label(), &id) {
+        return Err(AppError::Message(
+            "note body only available to its sticky window".into(),
+        ));
+    }
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     v.get_note(&id)
@@ -217,7 +296,7 @@ pub fn notes_create(
     let color = color.and_then(|c| parse_color(&c));
     let note = {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         if !v.status().unlocked {
@@ -248,7 +327,7 @@ pub fn notes_create(
 pub fn notes_create_from_tray(app: AppHandle, state: &VaultState) -> AppResult<NoteDto> {
     let note = {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         if !v.status().unlocked {
@@ -262,6 +341,7 @@ pub fn notes_create_from_tray(app: AppHandle, state: &VaultState) -> AppResult<N
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn notes_update(
     app: AppHandle,
     window: tauri::WebviewWindow,
@@ -280,7 +360,7 @@ pub fn notes_update(
     let color = color.and_then(|c| parse_color(&c));
     let note = {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.update_note(
@@ -329,7 +409,7 @@ pub fn notes_delete(
     }
     {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.delete_note(&id)?;
@@ -353,7 +433,7 @@ pub fn notes_open_window(
     ensure_manager_only(Some(&window))?;
     let unlocked = {
         let v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.status().unlocked
@@ -364,7 +444,7 @@ pub fn notes_open_window(
     }
     let note = {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.get_note(&id)?
@@ -390,13 +470,13 @@ pub fn notes_open_all(
     state: State<'_, VaultState>,
 ) -> AppResult<()> {
     ensure_manager_only(Some(&window))?;
-    notes_open_all_inner(app, &*state)
+    notes_open_all_inner(app, &state)
 }
 
 fn notes_open_all_inner(app: AppHandle, state: &VaultState) -> AppResult<()> {
     let unlocked = {
         let v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.status().unlocked
@@ -407,7 +487,7 @@ fn notes_open_all_inner(app: AppHandle, state: &VaultState) -> AppResult<()> {
     }
     let notes = {
         let mut v = state
-            .0
+            .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
         v.list_notes()?
@@ -436,7 +516,7 @@ pub fn set_idle_lock_secs(
 ) -> AppResult<()> {
     ensure_manager_only(Some(&window))?;
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     v.set_idle_lock_secs(secs)
@@ -451,13 +531,13 @@ pub fn change_password(
 ) -> AppResult<()> {
     ensure_manager_only(Some(&window))?;
     let mut v = state
-        .0
+        .vault
         .lock()
         .map_err(|e| AppError::Message(e.to_string()))?;
     v.change_password(&current, &new_password)
 }
 
-#[tauri::command]
+/// Internal show (tray / backend). Prefer the gated command from webviews.
 pub fn show_main(app: AppHandle) -> AppResult<()> {
     if let Some(main) = app.get_webview_window("main") {
         if let Some(icon) = app.default_window_icon() {
@@ -471,16 +551,34 @@ pub fn show_main(app: AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename = "show_main")]
+pub fn show_main_cmd(window: tauri::WebviewWindow, app: AppHandle) -> AppResult<()> {
+    ensure_manager_only(Some(&window))?;
+    show_main(app)
+}
+
+/// Internal hide (tray / backend).
 pub fn hide_main(app: AppHandle) -> AppResult<()> {
     hide_main_window(&app);
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename = "hide_main")]
+pub fn hide_main_cmd(window: tauri::WebviewWindow, app: AppHandle) -> AppResult<()> {
+    ensure_manager_only(Some(&window))?;
+    hide_main(app)
+}
+
+/// Internal quit (tray / backend).
 pub fn quit_app(app: AppHandle) -> AppResult<()> {
     crate::request_quit(&app);
     Ok(())
+}
+
+#[tauri::command(rename = "quit_app")]
+pub fn quit_app_cmd(window: tauri::WebviewWindow, app: AppHandle) -> AppResult<()> {
+    ensure_manager_only(Some(&window))?;
+    quit_app(app)
 }
 
 /// Allowlisted external links only (About → GitHub). No free-form URLs from the webview.
@@ -492,7 +590,13 @@ const ALLOWED_EXTERNAL_URLS: &[&str] = &[
 ];
 
 #[tauri::command]
-pub fn open_external_url(url: String) -> AppResult<()> {
+pub fn open_external_url(window: tauri::WebviewWindow, url: String) -> AppResult<()> {
+    ensure_manager_only(Some(&window))?;
+    open_external_url_inner(&url)
+}
+
+/// Allowlist check used by the command and unit tests (no window context).
+fn open_external_url_inner(url: &str) -> AppResult<()> {
     let trimmed = url.trim();
     if !ALLOWED_EXTERNAL_URLS.contains(&trimmed) {
         return Err(AppError::Message("url not allowed".into()));
@@ -511,7 +615,7 @@ fn open_url_in_browser(url: &str) -> AppResult<()> {
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| AppError::Message(format!("open url: {e}")))?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(windows))]
     {
@@ -543,7 +647,7 @@ pub fn close_all_note_windows(app: &AppHandle) {
     }
 }
 
-fn parse_color(s: &str) -> Option<NoteColor> {
+pub(crate) fn parse_color(s: &str) -> Option<NoteColor> {
     match s.to_lowercase().as_str() {
         "yellow" => Some(NoteColor::Yellow),
         "green" => Some(NoteColor::Green),
@@ -614,8 +718,13 @@ fn open_note_window(app: &AppHandle, note: &NoteDto) -> AppResult<()> {
         (note.x, note.y)
     };
     // Whole-pixel min from live sticky measure (~343×247) → 345×250.
-    let width = note.width.clamp(NOTE_MIN_WIDTH, NOTE_MAX_SIZE);
-    let height = note.height.clamp(NOTE_MIN_HEIGHT, NOTE_MAX_SIZE);
+    let width = sanitize_size(note.width, NOTE_MIN_WIDTH, NOTE_MAX_SIZE, NOTE_MIN_WIDTH);
+    let height = sanitize_size(
+        note.height,
+        NOTE_MIN_HEIGHT,
+        NOTE_MAX_SIZE,
+        NOTE_DEFAULT_HEIGHT,
+    );
 
     let id_js = note.id.replace('\\', "\\\\").replace('\'', "\\'");
     let (bg_r, bg_g, bg_b) = match &note.color {
@@ -804,10 +913,110 @@ mod tests {
     }
 
     #[test]
+    fn note_body_acl_owner_only_not_main() {
+        let id = "abc-123";
+        assert!(!note_body_access_allowed("main", id));
+        assert!(note_body_access_allowed(&format!("note-{id}"), id));
+        assert!(!note_body_access_allowed("note-other-id", id));
+        assert!(!note_body_access_allowed("random", id));
+    }
+
+    #[test]
     fn manager_or_tray_acl() {
         assert!(manager_or_tray_allowed(None));
         assert!(manager_or_tray_allowed(Some("main")));
         assert!(!manager_or_tray_allowed(Some("note-xyz")));
         assert!(!manager_or_tray_allowed(Some("other")));
+    }
+
+    #[test]
+    fn external_url_allowlist_rejects_unknown() {
+        let bad = [
+            "https://evil.example",
+            "https://github.com/AhmiDarrow/SecretSticky/../../evil",
+            "javascript:alert(1)",
+            "file:///C:/Windows/System32",
+            "https://github.com/AhmiDarrow/SecretSticky/wiki",
+            "",
+            "  ",
+        ];
+        for url in bad {
+            let err = open_external_url_inner(url).unwrap_err().to_string();
+            assert!(
+                err.contains("not allowed"),
+                "expected reject for {url:?}, got {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn external_url_allowlist_accepts_known() {
+        // We only assert allowlist membership here — spawning a browser is side-effectful.
+        for url in ALLOWED_EXTERNAL_URLS {
+            assert!(
+                ALLOWED_EXTERNAL_URLS.contains(url),
+                "allowlist must include {url}"
+            );
+            let trimmed = (*url).trim();
+            assert!(ALLOWED_EXTERNAL_URLS.contains(&trimmed));
+        }
+        // Exact match required (no trailing slash drift)
+        assert!(!ALLOWED_EXTERNAL_URLS.contains(&"https://github.com/AhmiDarrow/"));
+    }
+
+    #[test]
+    fn note_min_size_constants_sane() {
+        // Shared with vault geometry clamp — single source of truth
+        assert_eq!(NOTE_MIN_WIDTH, crate::vault::NOTE_MIN_WIDTH);
+        assert_eq!(NOTE_MIN_HEIGHT, crate::vault::NOTE_MIN_HEIGHT);
+        assert_eq!(NOTE_MAX_SIZE, crate::vault::NOTE_MAX_SIZE);
+        // Sanity bounds as runtime comparisons (avoid clippy::assertions_on_constants)
+        let min_w = NOTE_MIN_WIDTH;
+        let min_h = NOTE_MIN_HEIGHT;
+        let max = NOTE_MAX_SIZE;
+        assert!(min_w >= 200.0 && min_h >= 150.0 && max > min_w && max > min_h);
+    }
+
+    #[test]
+    fn parse_color_accepts_aliases_and_rejects_unknown() {
+        assert_eq!(parse_color("yellow"), Some(NoteColor::Yellow));
+        assert_eq!(parse_color("YELLOW"), Some(NoteColor::Yellow));
+        assert_eq!(parse_color("gray"), Some(NoteColor::Gray));
+        assert_eq!(parse_color("grey"), Some(NoteColor::Gray));
+        assert_eq!(parse_color("darkgreen"), Some(NoteColor::DarkGreen));
+        assert_eq!(parse_color("dark_green"), Some(NoteColor::DarkGreen));
+        assert_eq!(parse_color("dark-green"), Some(NoteColor::DarkGreen));
+        assert_eq!(parse_color("blue"), Some(NoteColor::Blue));
+        assert_eq!(parse_color("not-a-color"), None);
+        assert_eq!(parse_color(""), None);
+        assert_eq!(parse_color("red"), None);
+    }
+
+    #[test]
+    fn color_to_rgba_matches_css_hex() {
+        // RGB tuples must match NoteColor::as_css hex digits
+        let cases = [
+            (NoteColor::Yellow, (255, 229, 102)),
+            (NoteColor::Green, (184, 224, 138)),
+            (NoteColor::Pink, (245, 168, 192)),
+            (NoteColor::Blue, (126, 196, 245)),
+            (NoteColor::Purple, (199, 155, 224)),
+            (NoteColor::Gray, (212, 212, 216)),
+            (NoteColor::Black, (18, 18, 18)),
+            (NoteColor::DarkGreen, (22, 61, 44)),
+        ];
+        for (c, (r, g, b)) in cases {
+            let rgba = color_to_rgba(&c);
+            assert_eq!(rgba.0, r, "{c:?} R");
+            assert_eq!(rgba.1, g, "{c:?} G");
+            assert_eq!(rgba.2, b, "{c:?} B");
+            assert_eq!(rgba.3, 255);
+            // Cross-check against as_css hex
+            let hex = c.as_css().trim_start_matches('#');
+            let hr = u8::from_str_radix(&hex[0..2], 16).unwrap();
+            let hg = u8::from_str_radix(&hex[2..4], 16).unwrap();
+            let hb = u8::from_str_radix(&hex[4..6], 16).unwrap();
+            assert_eq!((r, g, b), (hr, hg, hb), "{c:?} rgba vs css");
+        }
     }
 }

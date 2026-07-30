@@ -1,13 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Manager window — full app controls (process/updater/window admin)",
-  "windows": ["main"],
+  "identifier": "note",
+  "description": "Sticky note windows — minimal window/event surface (no process/updater)",
+  "windows": ["note-*"],
   "permissions": [
     "core:default",
     "core:window:default",
     "core:window:allow-close",
-    "core:window:allow-destroy",
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-focus",
@@ -20,16 +19,7 @@
     "core:window:allow-outer-size",
     "core:window:allow-inner-size",
     "core:window:allow-is-visible",
-    "core:window:allow-is-minimized",
-    "core:window:allow-unminimize",
-    "core:window:allow-current-monitor",
-    "core:window:allow-primary-monitor",
-    "core:window:allow-available-monitors",
     "core:event:default",
-    "core:app:default",
-    "core:path:default",
-    "process:allow-restart",
-    "process:allow-exit",
-    "updater:default"
+    "core:app:default"
   ]
 }

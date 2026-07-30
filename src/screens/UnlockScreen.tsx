@@ -24,8 +24,8 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
     setBusy(true);
     try {
       if (isSetup) {
-        if (password.length < 8) {
-          throw new Error("Use at least 8 characters");
+        if (password.length < 12) {
+          throw new Error("Use at least 12 characters");
         }
         if (password !== confirm) {
           throw new Error("Passwords do not match");

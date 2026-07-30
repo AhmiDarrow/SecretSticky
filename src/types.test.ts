@@ -1,40 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { applyNoteTheme, COLORS, type NoteColor } from "./types";
+import { COLORS, applyNoteTheme, type NoteColor } from "./types";
 
 describe("COLORS palette", () => {
-  it("has eight sticky colors with unique ids", () => {
+  it("has eight sticky colors", () => {
     expect(COLORS).toHaveLength(8);
+  });
+
+  it("ids are unique and match NoteColor union", () => {
     const ids = COLORS.map((c) => c.id);
-    expect(new Set(ids).size).toBe(8);
-  });
-
-  it("every color has hex background and text", () => {
-    for (const c of COLORS) {
-      expect(c.css).toMatch(/^#[0-9a-fA-F]{6}$/);
-      expect(c.text).toMatch(/^#[0-9a-fA-F]{6}$/);
-      expect(c.label.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("marks only dark stickies as dark", () => {
-    const dark = COLORS.filter((c) => c.dark).map((c) => c.id);
-    expect(dark.sort()).toEqual(["black", "darkgreen"].sort());
-  });
-
-  it("includes required product colors", () => {
-    const ids = new Set(COLORS.map((c) => c.id));
-    for (const need of [
+    expect(new Set(ids).size).toBe(ids.length);
+    const expected: NoteColor[] = [
       "yellow",
-      "black",
-      "darkgreen",
       "green",
       "pink",
       "blue",
       "purple",
       "gray",
-    ] as NoteColor[]) {
-      expect(ids.has(need)).toBe(true);
+      "black",
+      "darkgreen",
+    ];
+    expect(ids.sort()).toEqual([...expected].sort());
+  });
+
+  it("every entry has css hex and contrasting text", () => {
+    for (const c of COLORS) {
+      expect(c.css).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(c.text).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(c.label.length).toBeGreaterThan(0);
+      expect(c.css.toLowerCase()).not.toBe(c.text.toLowerCase());
     }
+  });
+
+  it("marks only dark backgrounds as dark", () => {
+    const dark = COLORS.filter((c) => c.dark).map((c) => c.id);
+    expect(dark).toEqual(expect.arrayContaining(["black", "darkgreen"]));
+    expect(dark).toHaveLength(2);
   });
 });
 
