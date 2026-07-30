@@ -1090,7 +1090,10 @@ mod tests {
             n.id
         };
         // "Upgrade": new process loads existing AppData vault only — never wipe.
-        assert!(path.exists(), "vault.json must remain on disk across restarts");
+        assert!(
+            path.exists(),
+            "vault.json must remain on disk across restarts"
+        );
         let mut v2 = Vault::open_path(path).unwrap();
         v2.unlock("password1234").unwrap();
         let got = v2.get_note(&id).unwrap();
