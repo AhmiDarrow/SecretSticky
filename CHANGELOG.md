@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-07-30
+
+### Fixed
+
+- Sticky note windows stuck on **Loading note…** with *only the manager can create or delete notes* after 0.1.4 ACL hardening — `vault_status` and `show_main` again allow `note-*` windows (needed for boot unlock check and Unlock button)
+
 ## [0.1.4] — 2026-07-30
 
 ### Added

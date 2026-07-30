@@ -43,6 +43,12 @@ pub(crate) fn manager_or_tray_allowed(window_label: Option<&str>) -> bool {
     }
 }
 
+/// Manager or any sticky (`note-*`) may read vault status / show unlock UI.
+/// Status has no secrets; stickies need `unlocked` on boot and Unlock → manager.
+pub(crate) fn main_or_note_allowed(window_label: &str) -> bool {
+    window_label == "main" || window_label.starts_with("note-")
+}
+
 fn ensure_note_window_acl(window: &tauri::WebviewWindow, note_id: &str) -> AppResult<()> {
     if note_access_allowed(window.label(), note_id) {
         Ok(())
@@ -68,7 +74,22 @@ fn ensure_manager_or_tray(window: Option<&tauri::WebviewWindow>) -> AppResult<()
 
 /// Admin / vault-wide actions: manager window or tray/backend only.
 fn ensure_manager_only(window: Option<&tauri::WebviewWindow>) -> AppResult<()> {
-    ensure_manager_or_tray(window)
+    if manager_or_tray_allowed(window.map(|w| w.label())) {
+        Ok(())
+    } else {
+        Err(AppError::Message(
+            "only the manager window may perform this action".into(),
+        ))
+    }
+}
+
+/// Boot / unlock path: manager + sticky windows only.
+fn ensure_main_or_note(window: &tauri::WebviewWindow) -> AppResult<()> {
+    if main_or_note_allowed(window.label()) {
+        Ok(())
+    } else {
+        Err(AppError::Message("unauthorized window".into()))
+    }
 }
 
 #[tauri::command]
@@ -76,8 +97,9 @@ pub fn vault_status(
     window: tauri::WebviewWindow,
     state: State<'_, VaultState>,
 ) -> AppResult<VaultStatus> {
-    // Manager-only: note windows must not probe vault metadata.
-    ensure_manager_only(Some(&window))?;
+    // Stickies call this on boot to know if the vault is unlocked.
+    // No secrets in VaultStatus — still deny unknown window labels.
+    ensure_main_or_note(&window)?;
     let v = state
         .vault
         .lock()
@@ -553,7 +575,8 @@ pub fn show_main(app: AppHandle) -> AppResult<()> {
 
 #[tauri::command(rename = "show_main")]
 pub fn show_main_cmd(window: tauri::WebviewWindow, app: AppHandle) -> AppResult<()> {
-    ensure_manager_only(Some(&window))?;
+    // Stickies use this for "Unlock" when the vault is locked.
+    ensure_main_or_note(&window)?;
     show_main(app)
 }
 
@@ -927,6 +950,16 @@ mod tests {
         assert!(manager_or_tray_allowed(Some("main")));
         assert!(!manager_or_tray_allowed(Some("note-xyz")));
         assert!(!manager_or_tray_allowed(Some("other")));
+    }
+
+    #[test]
+    fn main_or_note_acl_allows_manager_and_stickies() {
+        assert!(main_or_note_allowed("main"));
+        assert!(main_or_note_allowed("note-abc-123"));
+        assert!(main_or_note_allowed("note-"));
+        assert!(!main_or_note_allowed("other"));
+        assert!(!main_or_note_allowed("tray"));
+        assert!(!main_or_note_allowed(""));
     }
 
     #[test]

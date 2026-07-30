@@ -42,7 +42,8 @@ We will credit reporters who want attribution (unless you prefer anonymity).
 ## Hardening notes
 
 - Note windows cannot read other notes' full bodies; manager uses preview list only.
-- Manager-only commands: vault status, quit, show/hide main, open external URL.
+- Manager + sticky windows may read vault status (no secrets) and show the manager for unlock.
+- Manager-only commands: quit, hide main, open external URL, create note, vault setup/unlock/lock, list notes, open windows, idle settings, change password.
 - Sticky note capability is split from manager (no process/updater permissions).
 - Master password minimum length is 12 characters.
 - Unlock attempts are rate-limited (escalating cooldown after repeated failures).
