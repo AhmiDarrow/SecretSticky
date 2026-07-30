@@ -2,6 +2,20 @@
 //!
 //! Layout under `%APPDATA%/SecretSticky/`:
 //! - `vault.json` — header + encrypted note blobs (no plaintext)
+//!
+//! # Invariant: updates must NEVER corrupt saved stickies
+//!
+//! This is a **hard product rule** (see repo `SECURITY.md` / `CONTRIBUTING.md`):
+//!
+//! - Installers and auto-update replace the **app binary only**. They must never
+//!   delete or rewrite `vault.json` under the user's AppData directory.
+//! - Format changes are **backward-compatible**: always be able to **read** vaults
+//!   written by prior supported 0.1.x builds. Prefer optional fields with defaults;
+//!   never ship a destructive migration that drops notes or re-keys without the user.
+//! - Saves use temp file + replace so a crash mid-write does not leave a half-written
+//!   vault as the only copy.
+//! - IPC/ACL/UI bugs that block displaying a note are critical regressions; they still
+//!   must not wipe or rewrite ciphertext. Prefer fail-closed errors over empty vaults.
 
 use std::collections::HashMap;
 use std::fs;
@@ -21,6 +35,11 @@ use crate::crypto::{
 };
 use crate::error::{AppError, AppResult};
 
+/// On-disk vault format version.
+///
+/// Bump only with a **backward-compatible** reader path for every older version we
+/// still support. Never ship a version that cannot open vaults from prior 0.1.x
+/// builds — updates must not corrupt or strand saved stickies.
 pub const VAULT_VERSION: u32 = 1;
 pub const DEFAULT_IDLE_LOCK_SECS: u64 = 15 * 60; // 15 minutes
 
@@ -297,6 +316,10 @@ impl Vault {
         self.session = None;
     }
 
+    /// Write vault to disk via temp + replace.
+    ///
+    /// Never truncates the live `vault.json` in place: a failed write must not
+    /// destroy the previous good file (update / crash safety for saved stickies).
     fn persist(&self) -> AppResult<()> {
         let file = self.file.as_ref().ok_or(AppError::NotInitialized)?;
         if let Some(parent) = self.path.parent() {
@@ -1041,6 +1064,9 @@ mod tests {
         assert_eq!(v.get_note(&n.id).unwrap().body, "super-secret-body");
     }
 
+    /// Stand-in for "app update then reopen": process drops Vault, opens same
+    /// vault.json path, unlocks with same password — note bodies must be intact.
+    /// Invariant: updates must NEVER corrupt saved stickies (SECURITY.md).
     #[test]
     fn single_note_persist_survives_reload() {
         let dir = tempdir().unwrap();
@@ -1063,11 +1089,23 @@ mod tests {
             .unwrap();
             n.id
         };
+        // "Upgrade": new process loads existing AppData vault only — never wipe.
+        assert!(path.exists(), "vault.json must remain on disk across restarts");
         let mut v2 = Vault::open_path(path).unwrap();
         v2.unlock("password1234").unwrap();
         let got = v2.get_note(&id).unwrap();
         assert_eq!(got.body, "body-one");
         assert_eq!(got.color, NoteColor::Black);
+    }
+
+    /// Format version is intentionally stable; bump only with a reader for older files.
+    #[test]
+    fn vault_format_version_is_backward_compatible_baseline() {
+        assert_eq!(
+            VAULT_VERSION, 1,
+            "bumping VAULT_VERSION requires a compatible reader for prior on-disk vaults; \
+             updates must never strand saved stickies"
+        );
     }
 
     #[test]

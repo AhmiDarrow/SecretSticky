@@ -16,6 +16,10 @@ pub(crate) fn note_id_from_label(label: &str) -> Option<&str> {
 /// Pure ACL: which window labels may read/update a given note id.
 /// Manager (`main`) may update metadata via notes_update but must not
 /// receive full note bodies (see `notes_get` — note windows only).
+///
+/// ACL changes must never make existing stickies unreadable on disk.
+/// Blocking display without a working open path is a critical bug; wiping
+/// or rewriting vault ciphertext is forbidden (see SECURITY.md).
 pub(crate) fn note_access_allowed(window_label: &str, note_id: &str) -> bool {
     if window_label == "main" {
         return true;

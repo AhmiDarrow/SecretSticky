@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Record non-negotiable invariant: **updates must never corrupt saved stickies** (SECURITY.md, CONTRIBUTING.md, README, vault module docs)
+
 ## [0.1.5] — 2026-07-30
 
 ### Fixed

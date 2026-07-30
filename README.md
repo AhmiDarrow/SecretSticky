@@ -82,6 +82,10 @@ npm run tauri:build    # release installers under src-tauri/target/release/bundl
 
 Atomic replace on save (temp file + replace) so a crash mid-write is less likely to corrupt the vault.
 
+### Updates must NEVER corrupt saved stickies
+
+**Non-negotiable product rule:** installing or auto-updating SecretSticky only replaces the application. Your vault stays under `%APPDATA%\SecretSticky\` and must remain unlockable with the same master password / recovery key after every update. App releases must not wipe notes, rewrite ciphertext incompatibly, or ship ACL/UI changes that leave stickies permanently unreadable. Full invariant: [SECURITY.md](SECURITY.md).
+
 ## Security model
 
 ### Protects

@@ -63,6 +63,25 @@ npx tauri icon app-icon.png -o src-tauri/icons
 - Keep IPC least-privilege: note windows must not gain manager-only commands
 - Update README threat model when behavior changes
 
+## Non-negotiable: updates must NEVER corrupt saved stickies
+
+See [SECURITY.md](SECURITY.md) — this is a **ship blocker**, not a nice-to-have.
+
+Before any PR that touches vault format, crypto, persistence, IPC ACL, sticky boot, installers, or the updater:
+
+1. **AppData is sacred** — updates replace the app binary only. Never delete/rewrite `%APPDATA%\SecretSticky\vault.json` from install/update paths.
+2. **Backward-compatible vault reads** — any new code must still unlock and list notes from vaults written by prior 0.1.x builds. Prefer optional fields + defaults; no destructive migrations.
+3. **Sticky windows must still load** — if you tighten ACL, re-test open sticky, create sticky, unlock-from-locked-sticky, and manager list. A sticky stuck on “Loading note…” with a cryptic ACL error is a **critical regression** (as in 0.1.4 → fixed in 0.1.5).
+4. **No silent data wipe** — failed decrypt, locked vault, or ACL deny must error clearly; never replace the vault with an empty one “to fix” load errors.
+5. **Tests** — keep or add vault reload / legacy-format / persist-replace coverage in `vault.rs` when touching disk format.
+
+Checklist for release (in addition to green CI):
+
+- [ ] Fresh vault: create note → quit → reopen → body intact  
+- [ ] Upgrade path: vault from previous release still unlocks with same password  
+- [ ] Open sticky from manager after upgrade  
+- [ ] Auto-update / installer does not touch AppData vault  
+
 ## Commit style
 
 Conventional commits preferred:

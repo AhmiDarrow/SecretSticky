@@ -6,11 +6,30 @@
 |---------|-----------|
 | 0.1.x   | Yes       |
 
+## Non-negotiable: updates must NEVER corrupt saved stickies
+
+**Hard product invariant.** App updates (NSIS/MSI install, in-app auto-update, or replacing the binary) must **never**:
+
+1. Delete, truncate, wipe, or overwrite `%APPDATA%\SecretSticky\vault.json` as part of install/update
+2. Rewrite ciphertext so existing notes cannot decrypt with the same master password / recovery key
+3. Ship a vault-format change that cannot **read** vaults written by every prior supported 0.1.x build
+4. Make sticky note data unreadable by tightening IPC/ACL/UI without a working path to open notes (a stuck “Loading note…” is a **critical bug**, not acceptable “hardening”)
+
+**Allowed / required:**
+
+- Installers and the updater replace **application binaries only** under Program Files / install dir — never the user vault under AppData
+- On-disk format evolution is **additive and backward-compatible** only (new optional fields with defaults; read old → write new only after a successful unlock)
+- Atomic vault saves (`vault.json.tmp` then replace) so a crash mid-write does not leave a half-written file as the only copy
+- UI or ACL bugs may block *display*, but must not destroy *ciphertext on disk*
+
+If a change could violate this, it **does not ship**. Fix data safety first.
+
 ## What SecretSticky protects
 
 - Vault file at rest (`%APPDATA%\SecretSticky\vault.json`)
 - Note **titles and bodies** (authenticated encryption)
 - Casual snooping, disk theft, and backup copies of the vault file
+- Continuity of saved stickies across app updates (see invariant above)
 
 ## What it does **not** protect
 
@@ -19,7 +38,7 @@
 - Screen capture of open sticky windows
 - A fully compromised OS or debugger attached to the process
 
-There is **no backdoor** and **no cloud recovery**. Losing the master password and the recovery key means permanent data loss.
+There is **no backdoor** and **no cloud recovery**. Losing the master password and the recovery key means permanent data loss. The app will never intentionally destroy your vault to “recover” from that.
 
 ## Reporting a vulnerability
 
