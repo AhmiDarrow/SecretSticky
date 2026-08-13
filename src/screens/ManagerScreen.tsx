@@ -50,7 +50,7 @@ export function ManagerScreen({ onLock }: Props) {
     refresh();
     void getVersion()
       .then(setAppVersion)
-      .catch(() => setAppVersion("0.1.2"));
+      .catch(() => setAppVersion("—"));
     let unlisten: (() => void) | undefined;
     listen("notes-changed", () => {
       refresh();
@@ -118,8 +118,8 @@ export function ManagerScreen({ onLock }: Props) {
     setBusy(true);
     try {
       await clearClipboard();
-      // Brief pause so open stickies can finish debounced saves before vault_lock.
-      await new Promise((r) => window.setTimeout(r, 150));
+      // Backend vault_lock waits ~500ms after vault-about-to-lock so stickies
+      // can flush their 400ms debounce; no extra client delay needed here.
       await api.lock();
       await onLock();
     } catch (e) {
@@ -133,7 +133,7 @@ export function ManagerScreen({ onLock }: Props) {
     e.preventDefault();
     setPwMsg(null);
     setError(null);
-    if (newPw.length < 8) {
+    if (newPw.length < 12) {
       setPwMsg("New password must be at least 12 characters.");
       return;
     }

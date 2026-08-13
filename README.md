@@ -74,13 +74,14 @@ npm run tauri:build    # release installers under src-tauri/target/release/bundl
 
 ```
 %APPDATA%\SecretSticky\
-  vault.json    # encrypted note blobs + KDF params (no plaintext titles/bodies)
+  vault.json      # encrypted note blobs + KDF params (no plaintext titles/bodies)
+  vault.json.bak  # last-known-good copy (restored if live is missing/corrupt)
 ```
 
 - **Encrypted:** note title, note body  
 - **Plaintext by design:** window geometry, color id, timestamps (so chrome can restore without unlock content)
 
-Atomic replace on save (temp file + replace) so a crash mid-write is less likely to corrupt the vault.
+Durable save path: write + flush temp → snapshot `.bak` → atomic replace into `vault.json` (Windows uses `MoveFileExW` replace-in-place — never delete-then-rename). A crash mid-write must not leave you with zero copies of secrets.
 
 ### Updates must NEVER corrupt saved stickies
 

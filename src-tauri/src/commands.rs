@@ -225,8 +225,11 @@ pub fn vault_lock_from_tray(app: &AppHandle, state: &VaultState) -> AppResult<()
 }
 
 fn vault_lock_inner(app: &AppHandle, state: &VaultState) -> AppResult<()> {
-    // Give note windows a beat to flush debounced saves before we tear them down.
-    std::thread::sleep(Duration::from_millis(120));
+    // Note windows debounce body saves at 400ms. Wait longer than that so a
+    // Lock / tray Lock does not destroy stickies before the last keystrokes land.
+    // Idle path uses the same helper via vault_check_idle → close after lock.
+    let _ = app.emit("vault-about-to-lock", ());
+    std::thread::sleep(Duration::from_millis(500));
     {
         let mut v = state
             .vault
@@ -260,22 +263,20 @@ pub fn vault_touch(window: tauri::WebviewWindow, state: State<'_, VaultState>) -
 
 #[tauri::command]
 pub fn vault_check_idle(app: AppHandle, state: State<'_, VaultState>) -> AppResult<bool> {
-    let locked = {
-        let mut v = state
+    // If idle is due, use the same pre-lock grace as manual lock so debounced
+    // sticky saves (400ms) can land before windows are destroyed.
+    let due = {
+        let v = state
             .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
-        v.check_idle_lock()
+        v.is_idle_lock_due()
     };
-    if locked {
-        close_all_note_windows(&app);
-        let _ = app.emit("vault-locked", ());
-        if let Some(main) = app.get_webview_window("main") {
-            let _ = main.show();
-            let _ = main.set_focus();
-        }
+    if due {
+        vault_lock_inner(&app, &state)?;
+        return Ok(true);
     }
-    Ok(locked)
+    Ok(false)
 }
 
 /// Manager list — titles only (no body plaintext over IPC).

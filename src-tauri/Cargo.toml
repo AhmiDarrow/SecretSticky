@@ -1,6 +1,6 @@
 [package]
 name = "secretsticky"
-version = "0.1.5"
+version = "0.1.6"
 description = "Encrypted sticky notes for Windows - Sticky Notes feel, secrets safe at rest"
 authors = ["Ahmi Darrow"]
 edition = "2021"

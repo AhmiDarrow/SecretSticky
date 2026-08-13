@@ -248,9 +248,36 @@ impl Vault {
     }
 
     pub fn open_path(path: PathBuf) -> AppResult<Self> {
+        // Prefer the live vault. If it is missing (crash mid-replace on older
+        // builds) but a sibling `.bak` exists, restore it — never treat that as
+        // "uninitialized" and allow setup to mint an empty vault over secrets.
+        let bak = backup_path_for(&path);
+        if !path.exists() {
+            if bak.exists() {
+                restore_backup(&bak, &path)?;
+            }
+        }
+
         let file = if path.exists() {
-            let raw = fs::read_to_string(&path)?;
-            Some(serde_json::from_str(&raw)?)
+            match load_vault_file(&path) {
+                Ok(f) => Some(f),
+                Err(primary_err) => {
+                    // Corrupt/unreadable primary: try last-known-good backup.
+                    // Never delete the primary here — operator can recover offline.
+                    if bak.exists() {
+                        match load_vault_file(&bak) {
+                            Ok(f) => {
+                                // Best-effort restore so next boot uses the good copy.
+                                let _ = restore_backup(&bak, &path);
+                                Some(f)
+                            }
+                            Err(_) => return Err(primary_err),
+                        }
+                    } else {
+                        return Err(primary_err);
+                    }
+                }
+            }
         } else {
             None
         };
@@ -294,17 +321,21 @@ impl Vault {
         }
     }
 
-    /// Returns true if session was locked due to idle.
-    pub fn check_idle_lock(&mut self) -> bool {
-        let should_lock = self
-            .session
+    /// True when an unlocked session has exceeded the idle lock threshold.
+    /// Does not mutate session state (callers may flush UI before `lock()`).
+    pub fn is_idle_lock_due(&self) -> bool {
+        self.session
             .as_ref()
             .map(|s| {
                 s.idle_lock_secs > 0
                     && s.last_activity.elapsed() >= Duration::from_secs(s.idle_lock_secs)
             })
-            .unwrap_or(false);
-        if should_lock {
+            .unwrap_or(false)
+    }
+
+    /// Returns true if session was locked due to idle.
+    pub fn check_idle_lock(&mut self) -> bool {
+        if self.is_idle_lock_due() {
             self.lock();
             true
         } else {
@@ -327,8 +358,23 @@ impl Vault {
         }
         let tmp = self.path.with_extension("json.tmp");
         let data = serde_json::to_string_pretty(file)?;
-        fs::write(&tmp, data)?;
-        // Windows cannot rename over an existing file — replace atomically-ish.
+        // Write + flush temp fully before swapping into place so a power loss
+        // cannot leave a half-written live vault as the only copy.
+        {
+            use std::io::Write;
+            let mut f = fs::File::create(&tmp)?;
+            f.write_all(data.as_bytes())?;
+            f.sync_all()?;
+        }
+        // Keep a last-known-good sibling before replacing the live file.
+        // replace_file must never delete the live vault before the new bytes
+        // are durable at the destination path (see SECURITY.md invariant).
+        if self.path.exists() {
+            let bak = backup_path_for(&self.path);
+            // Best-effort snapshot of the previous good file. Failure here must
+            // not block the save — the live file is still intact until replace.
+            let _ = fs::copy(&self.path, &bak);
+        }
         replace_file(&tmp, &self.path)?;
         Ok(())
     }
@@ -814,21 +860,100 @@ impl Vault {
     }
 }
 
-/// Replace `from` → `to`. On Windows, `rename` fails if `to` exists.
+fn backup_path_for(path: &Path) -> PathBuf {
+    path.with_extension("json.bak")
+}
+
+fn load_vault_file(path: &Path) -> AppResult<VaultFile> {
+    let raw = fs::read_to_string(path)?;
+    let file: VaultFile = serde_json::from_str(&raw)?;
+    // v1 is the baseline. Additive fields use serde defaults.
+    // version 0 is invalid; > current means this build must not open/write-back
+    // (could strand or rewrite secrets the newer format expects).
+    if file.header.version == 0 {
+        return Err(AppError::Message(format!(
+            "vault format version {} is invalid",
+            file.header.version
+        )));
+    }
+    if file.header.version > VAULT_VERSION {
+        return Err(AppError::Message(format!(
+            "vault format version {} is newer than this app supports ({}) — upgrade SecretSticky; refusing to open so saved stickies are not rewritten",
+            file.header.version, VAULT_VERSION
+        )));
+    }
+    Ok(file)
+}
+
+/// Copy/rename backup into the live vault path without deleting backup first.
+fn restore_backup(bak: &Path, live: &Path) -> AppResult<()> {
+    if let Some(parent) = live.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    // Prefer copy so the .bak remains if the subsequent live write fails.
+    fs::copy(bak, live)?;
+    Ok(())
+}
+
+/// Replace `from` → `to` without a delete-then-rename hole.
+///
+/// **Critical for vault safety:** older Windows code did `remove_file(to)` then
+/// `rename(from, to)`. If rename failed (or the process died between the two),
+/// the only copy of `vault.json` was gone. That must never happen.
 fn replace_file(from: &Path, to: &Path) -> AppResult<()> {
     #[cfg(windows)]
     {
-        if to.exists() {
-            fs::remove_file(to)?;
-        }
-        fs::rename(from, to)?;
-        Ok(())
+        windows_replace_file(from, to)
     }
     #[cfg(not(windows))]
     {
+        // POSIX rename replaces atomically on the same filesystem.
         fs::rename(from, to)?;
         Ok(())
     }
+}
+
+#[cfg(windows)]
+fn windows_replace_file(from: &Path, to: &Path) -> AppResult<()> {
+    use std::os::windows::ffi::OsStrExt;
+
+    fn wide(path: &Path) -> Vec<u16> {
+        path.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+
+    // MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+    // Replaces the destination in one kernel call — never deletes `to` first.
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(
+            lp_existing_file_name: *const u16,
+            lp_new_file_name: *const u16,
+            dw_flags: u32,
+        ) -> i32;
+    }
+
+    let from_w = wide(from);
+    let to_w = wide(to);
+    let ok = unsafe {
+        MoveFileExW(
+            from_w.as_ptr(),
+            to_w.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok == 0 {
+        let err = std::io::Error::last_os_error();
+        return Err(AppError::Message(format!(
+            "atomic vault replace failed (saved stickies left untouched): {err}"
+        )));
+    }
+    Ok(())
 }
 
 /// Brute-force protection.
@@ -1135,6 +1260,12 @@ mod tests {
             n.id
         };
         assert!(path.exists());
+        // Last-known-good sibling must exist after a replace (crash safety).
+        let bak = backup_path_for(&path);
+        assert!(
+            bak.exists(),
+            "vault.json.bak must be written before replace so a failed swap cannot strand secrets"
+        );
         let mut v2 = Vault::open_path(path).unwrap();
         v2.unlock("password1234").unwrap();
         let got = v2.get_note(&id).unwrap();
@@ -1142,6 +1273,112 @@ mod tests {
         assert_eq!(got.body, "body-2");
         assert_eq!(got.x, 200.0);
         assert_eq!(got.y, 240.0);
+    }
+
+    /// If vault.json is missing but vault.json.bak remains (classic delete-then-rename
+    /// crash on older builds), open_path must restore secrets — never look uninitialized.
+    ///
+    /// `bak` is the pre-replace snapshot (N-1). We write the secret, then a second
+    /// meta-only save so bak retains the secret while live moves ahead.
+    #[test]
+    fn missing_live_vault_restores_from_bak() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("vault.json");
+        let bak = backup_path_for(&path);
+        let id = {
+            let mut v = Vault::open_path(path.clone()).unwrap();
+            v.setup("password1234").unwrap();
+            let n = v.create_note(None).unwrap();
+            v.update_note(
+                &n.id,
+                Some("bak-title".into()),
+                Some("bak-body-secret".into()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            // Second persist: bak becomes the snapshot that still has the secret body.
+            v.update_note(&n.id, None, None, None, Some(150.0), None, None, None, None)
+                .unwrap();
+            n.id
+        };
+        assert!(bak.exists());
+        // Simulate catastrophic mid-replace: live file gone, bak still present.
+        fs::remove_file(&path).unwrap();
+        assert!(!path.exists());
+
+        let mut v2 = Vault::open_path(path.clone()).unwrap();
+        assert!(
+            v2.status().initialized,
+            "must not treat missing live + present bak as fresh install"
+        );
+        assert!(path.exists(), "live vault.json must be restored from bak");
+        v2.unlock("password1234").unwrap();
+        let got = v2.get_note(&id).unwrap();
+        assert_eq!(got.title, "bak-title");
+        assert_eq!(got.body, "bak-body-secret");
+    }
+
+    /// Corrupt live file must not wipe secrets when a good bak exists.
+    #[test]
+    fn corrupt_live_vault_falls_back_to_bak() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("vault.json");
+        let bak = backup_path_for(&path);
+        let id = {
+            let mut v = Vault::open_path(path.clone()).unwrap();
+            v.setup("password1234").unwrap();
+            let n = v.create_note(None).unwrap();
+            v.update_note(
+                &n.id,
+                Some("good".into()),
+                Some("still-here".into()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            // Advance live once more so bak freezes on the secret-bearing revision.
+            v.update_note(&n.id, None, None, None, Some(160.0), None, None, None, None)
+                .unwrap();
+            n.id
+        };
+        // Poison the live file; bak still holds the previous good snapshot.
+        fs::write(&path, "{not-json").unwrap();
+        assert!(bak.exists());
+
+        let mut v2 = Vault::open_path(path).unwrap();
+        assert!(v2.status().initialized);
+        v2.unlock("password1234").unwrap();
+        let got = v2.get_note(&id).unwrap();
+        assert_eq!(got.body, "still-here");
+        assert_eq!(got.title, "good");
+    }
+
+    /// replace_file must never delete the destination before the new file is in place.
+    #[test]
+    fn replace_file_keeps_destination_if_source_missing() {
+        let dir = tempdir().unwrap();
+        let live = dir.path().join("vault.json");
+        let missing = dir.path().join("nope.json.tmp");
+        fs::write(&live, r#"{"keep":true}"#).unwrap();
+        let err = replace_file(&missing, &live).unwrap_err();
+        assert!(
+            live.exists(),
+            "failed replace must leave existing vault.json intact"
+        );
+        let body = fs::read_to_string(&live).unwrap();
+        assert!(
+            body.contains("keep"),
+            "destination contents must survive: {err}"
+        );
     }
 
     #[test]

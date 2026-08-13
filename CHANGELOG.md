@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-08-13
+
+### Security
+
+- **Vault durability (Windows):** replace `vault.json` with `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)` — never delete the live file before the new bytes are at the destination (closes a crash/failure window that could wipe the only copy of secrets)
+- Flush temp vault writes (`sync_all`) before swap
+- Keep `vault.json.bak` last-known-good; restore on missing or corrupt live file — never treat that as a fresh empty setup
+- Refuse vault format versions newer than this build (no unsafe write-back of secrets)
+
+### Fixed
+
+- Idle lock path can detect due lock without mutating session first (`is_idle_lock_due`) so UI can flush before `lock()`
+- Note window / manager small hardening around save and lock coordination
+
 ### Documentation
 
 - Record non-negotiable invariant: **updates must never corrupt saved stickies** (SECURITY.md, CONTRIBUTING.md, README, vault module docs)

@@ -19,7 +19,8 @@
 
 - Installers and the updater replace **application binaries only** under Program Files / install dir — never the user vault under AppData
 - On-disk format evolution is **additive and backward-compatible** only (new optional fields with defaults; read old → write new only after a successful unlock)
-- Atomic vault saves (`vault.json.tmp` then replace) so a crash mid-write does not leave a half-written file as the only copy
+- Atomic vault saves (`vault.json.tmp` then OS replace-in-place — never delete `vault.json` before the new file is durable)
+- Last-known-good sibling `vault.json.bak` before each successful replace; boot restores from `.bak` if the live file is missing or unreadable
 - UI or ACL bugs may block *display*, but must not destroy *ciphertext on disk*
 
 If a change could violate this, it **does not ship**. Fix data safety first.

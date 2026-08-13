@@ -70,7 +70,7 @@ See [SECURITY.md](SECURITY.md) — this is a **ship blocker**, not a nice-to-hav
 Before any PR that touches vault format, crypto, persistence, IPC ACL, sticky boot, installers, or the updater:
 
 1. **AppData is sacred** — updates replace the app binary only. Never delete/rewrite `%APPDATA%\SecretSticky\vault.json` from install/update paths.
-2. **Backward-compatible vault reads** — any new code must still unlock and list notes from vaults written by prior 0.1.x builds. Prefer optional fields + defaults; no destructive migrations.
+2. **Backward-compatible vault reads** — any new code must still unlock and list notes from vaults written by prior 0.1.x builds. Prefer optional fields + defaults; no destructive migrations. Persist via temp + OS replace-in-place (never delete `vault.json` before the new bytes are durable); keep `vault.json.bak` as last-known-good.
 3. **Sticky windows must still load** — if you tighten ACL, re-test open sticky, create sticky, unlock-from-locked-sticky, and manager list. A sticky stuck on “Loading note…” with a cryptic ACL error is a **critical regression** (as in 0.1.4 → fixed in 0.1.5).
 4. **No silent data wipe** — failed decrypt, locked vault, or ACL deny must error clearly; never replace the vault with an empty one “to fix” load errors.
 5. **Tests** — keep or add vault reload / legacy-format / persist-replace coverage in `vault.rs` when touching disk format.

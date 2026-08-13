@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api } from "../api";
 import { copySecret } from "../clipboard";
@@ -179,6 +180,16 @@ export function NoteWindow({ noteId }: Props) {
         }, 250);
       })
       .then((u) => unsubs.push(u));
+
+    // Backend emits this ~500ms before destroying stickies on Lock / idle.
+    // Flush immediately so the last keystrokes are not lost to the debounce.
+    listen("vault-about-to-lock", () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      void flushSave();
+    }).then((u) => unsubs.push(u));
 
     return () => {
       unsubs.forEach((u) => u());
