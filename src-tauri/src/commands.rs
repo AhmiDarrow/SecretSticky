@@ -65,17 +65,6 @@ fn ensure_note_window_acl(window: &tauri::WebviewWindow, note_id: &str) -> AppRe
     }
 }
 
-/// Manager / tray may create notes; note windows may not create siblings.
-fn ensure_manager_or_tray(window: Option<&tauri::WebviewWindow>) -> AppResult<()> {
-    if manager_or_tray_allowed(window.map(|w| w.label())) {
-        Ok(())
-    } else {
-        Err(AppError::Message(
-            "only the manager can create or delete notes".into(),
-        ))
-    }
-}
-
 /// Admin / vault-wide actions: manager window or tray/backend only.
 fn ensure_manager_only(window: Option<&tauri::WebviewWindow>) -> AppResult<()> {
     if manager_or_tray_allowed(window.map(|w| w.label())) {
@@ -215,7 +204,13 @@ pub fn vault_lock(
     window: tauri::WebviewWindow,
     state: State<'_, VaultState>,
 ) -> AppResult<()> {
-    ensure_manager_only(Some(&window))?;
+    // Manager or any sticky (`note-*`) may lock: locking flushes + closes all
+    // stickies and raises the manager, so a sticky Lock button is safe here.
+    if !main_or_note_allowed(window.label()) {
+        return Err(AppError::Message(
+            "only the manager or a sticky can lock the vault".into(),
+        ));
+    }
     vault_lock_inner(&app, &state)
 }
 
@@ -319,7 +314,13 @@ pub fn notes_create(
     state: State<'_, VaultState>,
     color: Option<String>,
 ) -> AppResult<NotePreviewDto> {
-    ensure_manager_or_tray(Some(&window))?;
+    // Manager or any sticky may create a sibling: the new note is empty and
+    // inherits only the color — no secret bodies cross window boundaries.
+    if !main_or_note_allowed(window.label()) {
+        return Err(AppError::Message(
+            "only the manager or a sticky can create notes".into(),
+        ));
+    }
     let color = color.and_then(|c| parse_color(&c));
     let note = {
         let mut v = state

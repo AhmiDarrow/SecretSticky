@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-09-03
+
+### Added
+
+- **Sticky chrome:** every note window gains **New note** (same-color sibling), **Manager**, and **Lock** buttons — create, manage, and lock straight from a sticky
+- **Auto-lock timer settings** in the manager (grid → Auto-lock): Off or 1 / 5 / 15 / 30 min / 1 / 2 / 4 / 8 / 12 h — persisted across lock; backend clamps to the same 12 h ceiling
+
+### Changed
+
+- New stickies no longer force **always on top** — a note floats only while pinned (📌); existing notes keep their saved flag
+
+### Security
+
+- Sticky windows may now create a sibling note and lock the vault (same authenticated, unlocked session — per-note body/delete ACL unchanged, unknown window labels still denied)
+
 ## [0.1.6] — 2026-08-13
 
 ### Security

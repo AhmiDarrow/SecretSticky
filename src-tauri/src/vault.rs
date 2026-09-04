@@ -42,6 +42,8 @@ use crate::error::{AppError, AppResult};
 /// builds — updates must not corrupt or strand saved stickies.
 pub const VAULT_VERSION: u32 = 1;
 pub const DEFAULT_IDLE_LOCK_SECS: u64 = 15 * 60; // 15 minutes
+/// Write-path ceiling for the auto-lock timer (UI: Off … 12 h).
+pub const MAX_IDLE_LOCK_SECS: u64 = 12 * 60 * 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -657,7 +659,8 @@ impl Vault {
             // Match sticky min floor; slightly taller default for typing room.
             width: NOTE_MIN_WIDTH,
             height: NOTE_DEFAULT_HEIGHT,
-            always_on_top: true,
+            // New stickies float only when pinned (📌) — never on top by default.
+            always_on_top: false,
             created_at: now,
             updated_at: now,
         };
@@ -739,6 +742,8 @@ impl Vault {
     }
 
     pub fn set_idle_lock_secs(&mut self, secs: u64) -> AppResult<()> {
+        // Sanitize: 0 (off) ..= 12 h ceiling, matching the manager presets.
+        let secs = secs.min(MAX_IDLE_LOCK_SECS);
         {
             let session = self.require_session()?;
             session.idle_lock_secs = secs;
@@ -1755,13 +1760,13 @@ mod tests {
     }
 
     #[test]
-    fn create_note_default_geometry_and_always_on_top() {
+    fn create_note_default_geometry_and_not_always_on_top() {
         let (_dir, mut v) = test_vault();
         v.setup("password1234").unwrap();
         let n = v.create_note(None).unwrap();
         assert_eq!(n.width, NOTE_MIN_WIDTH);
         assert_eq!(n.height, NOTE_DEFAULT_HEIGHT);
-        assert!(n.always_on_top);
+        assert!(!n.always_on_top, "new notes float only when pinned");
         assert_eq!(n.color, NoteColor::Yellow);
         assert_eq!(n.x, 120.0);
         assert_eq!(n.y, 120.0);
@@ -1785,6 +1790,16 @@ mod tests {
         v.setup("password1234").unwrap();
         v.lock();
         assert!(matches!(v.set_idle_lock_secs(10), Err(AppError::Locked)));
+    }
+
+    #[test]
+    fn set_idle_lock_secs_clamps_to_ceiling() {
+        let (_dir, mut v) = test_vault();
+        v.setup("password1234").unwrap();
+        v.set_idle_lock_secs(MAX_IDLE_LOCK_SECS + 9999).unwrap();
+        assert_eq!(v.status().idle_lock_secs, MAX_IDLE_LOCK_SECS);
+        v.set_idle_lock_secs(0).unwrap();
+        assert_eq!(v.status().idle_lock_secs, 0);
     }
 
     #[test]

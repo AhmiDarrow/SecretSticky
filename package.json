@@ -1,7 +1,7 @@
 {
   "name": "secretsticky",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Encrypted sticky notes for Windows — Sticky Notes feel, secrets safe at rest. Hi I'm Ahmi, hope this helps!",
   "author": "Ahmi Darrow <https://github.com/AhmiDarrow>",
   "license": "MIT",
@@ -21,6 +21,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "bump:version": "node scripts/bump-version.mjs",
     "test": "tsc --noEmit && vitest run",
     "test:watch": "vitest",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",

@@ -44,6 +44,7 @@ CI runs the same gates on `windows-latest`.
 | `.github/workflows/` | CI + release |
 | `app-icon.png` | Master 1024×1024 icon source |
 | `scripts/prepare_icon.py` | Rebuild public favicons from the master PNG |
+| `scripts/bump-version.mjs` | Single-source version bump — npm lockfile + Cargo + Tauri config |
 | `src-tauri/icons/` | Window / tray / installer icons (`npx tauri icon app-icon.png`) |
 
 ### Regenerating icons
@@ -93,7 +94,7 @@ Conventional commits preferred:
 
 ## Release
 
-1. Bump version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` together
+1. Bump the version once: `npm run bump:version -- X.Y.Z` keeps `package.json` (+ lockfile), `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` in step — nothing else hardcodes the version
 2. Update `CHANGELOG.md`
 3. Merge to `main` with green CI
 4. Ensure repo secret **`TAURI_SIGNING_PRIVATE_KEY`** is set (minisign private key matching the public key in `tauri.conf.json` → `plugins.updater.pubkey`). Optional password: `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.

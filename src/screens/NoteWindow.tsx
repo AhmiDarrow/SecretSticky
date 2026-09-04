@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api } from "../api";
-import { copySecret } from "../clipboard";
+import { clearClipboard, copySecret } from "../clipboard";
 import {
   COLORS,
   applyNoteTheme,
@@ -218,6 +218,43 @@ export function NoteWindow({ noteId }: Props) {
     window.setTimeout(() => setCopyHint(null), 2500);
   };
 
+  const newSiblingNote = async () => {
+    if (!note) return;
+    try {
+      setError(null);
+      await api.createNote(note.color);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const openManager = async () => {
+    try {
+      setError(null);
+      await api.showMain();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const lockVault = async () => {
+    try {
+      setError(null);
+      await clearClipboard();
+      // Backend emits vault-about-to-lock (we flush the 400ms debounce), then
+      // destroys stickies and raises the manager. If this window survives,
+      // close it so a locked vault never leaves a live sticky around.
+      await api.lock();
+      try {
+        await winRef.current.destroy();
+      } catch {
+        /* already destroyed by the backend */
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   if (error && !note) {
     return (
       <div className="note-shell">
@@ -283,6 +320,33 @@ export function NoteWindow({ noteId }: Props) {
           ))}
         </div>
         <div className="titlebar-actions no-drag" data-tauri-drag-region="false">
+          <button
+            type="button"
+            className="ghost no-drag icon-action"
+            title="New note"
+            aria-label="New note (same color)"
+            onClick={() => void newSiblingNote()}
+          >
+            ＋
+          </button>
+          <button
+            type="button"
+            className="ghost no-drag icon-action"
+            title="Open manager"
+            aria-label="Open manager"
+            onClick={() => void openManager()}
+          >
+            🏠
+          </button>
+          <button
+            type="button"
+            className="ghost no-drag icon-action"
+            title="Lock vault"
+            aria-label="Lock vault"
+            onClick={() => void lockVault()}
+          >
+            🔒
+          </button>
           <span className="save-dot" title={saved ? "Saved" : "Saving…"}>
             {saved ? "✓" : "…"}
           </span>

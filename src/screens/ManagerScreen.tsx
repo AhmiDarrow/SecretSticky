@@ -14,6 +14,31 @@ const GITHUB_PROFILE = "https://github.com/AhmiDarrow";
 const GITHUB_REPO = "https://github.com/AhmiDarrow/SecretSticky";
 const GITHUB_RELEASES = "https://github.com/AhmiDarrow/SecretSticky/releases";
 
+/** Backend default: 15 minutes. Used until the live status arrives. */
+const DEFAULT_AUTO_LOCK_SECS = 15 * 60;
+
+/** Auto-lock presets — Off … 12 h. These are the only values the UI sends. */
+const AUTO_LOCK_PRESETS: ReadonlyArray<{ secs: number; label: string }> = [
+  { secs: 0, label: "Off" },
+  { secs: 60, label: "1 min" },
+  { secs: 300, label: "5 min" },
+  { secs: 900, label: "15 min" },
+  { secs: 1800, label: "30 min" },
+  { secs: 3600, label: "1 hr" },
+  { secs: 7200, label: "2 hr" },
+  { secs: 14400, label: "4 hr" },
+  { secs: 28800, label: "8 hr" },
+  { secs: 43200, label: "12 hr" },
+];
+
+function formatAutoLock(secs: number): string {
+  if (!Number.isFinite(secs) || secs <= 0) return "Off";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min`;
+  const hrs = mins / 60;
+  return `${hrs % 1 === 0 ? hrs : hrs.toFixed(1)} hr${hrs === 1 ? "" : "s"}`;
+}
+
 interface Props {
   onLock: () => void | Promise<void>;
 }
@@ -25,6 +50,8 @@ export function ManagerScreen({ onLock }: Props) {
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showAutoLock, setShowAutoLock] = useState(false);
+  const [autoLockSecs, setAutoLockSecs] = useState<number>(DEFAULT_AUTO_LOCK_SECS);
   const [deleteTarget, setDeleteTarget] = useState<NotePreviewDto | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
@@ -48,6 +75,10 @@ export function ManagerScreen({ onLock }: Props) {
 
   useEffect(() => {
     refresh();
+    void api
+      .status()
+      .then((s) => setAutoLockSecs(s.idle_lock_secs))
+      .catch(() => setAutoLockSecs(DEFAULT_AUTO_LOCK_SECS));
     void getVersion()
       .then(setAppVersion)
       .catch(() => setAppVersion("—"));
@@ -156,6 +187,23 @@ export function ManagerScreen({ onLock }: Props) {
     }
   };
 
+  const applyAutoLock = async (secs: number) => {
+    // Sanitize client-side too: finite, integer, 0 ..= 12 h only.
+    const safe = Number.isFinite(secs)
+      ? Math.min(Math.max(Math.round(secs), 0), 12 * 3600)
+      : 0;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setIdleLockSecs(safe);
+      setAutoLockSecs(safe);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -195,6 +243,7 @@ export function ManagerScreen({ onLock }: Props) {
               setShowAbout((v) => !v);
               if (!showAbout) {
                 setShowPassword(false);
+                setShowAutoLock(false);
                 setDeleteTarget(null);
               }
             }}
@@ -209,12 +258,34 @@ export function ManagerScreen({ onLock }: Props) {
               setPwMsg(null);
               if (!showPassword) {
                 setShowAbout(false);
+                setShowAutoLock(false);
                 setDeleteTarget(null);
               }
             }}
             disabled={busy}
           >
             Password
+          </button>
+          <button
+            type="button"
+            aria-expanded={showAutoLock}
+            className={autoLockSecs === 0 ? undefined : "primary"}
+            title={
+              autoLockSecs === 0
+                ? "Auto-lock is off"
+                : `Auto-lock after ${formatAutoLock(autoLockSecs)} of inactivity`
+            }
+            onClick={() => {
+              setShowAutoLock((v) => !v);
+              if (!showAutoLock) {
+                setShowAbout(false);
+                setShowPassword(false);
+                setDeleteTarget(null);
+              }
+            }}
+            disabled={busy}
+          >
+            Auto-lock
           </button>
           <button
             type="button"
@@ -400,6 +471,65 @@ export function ManagerScreen({ onLock }: Props) {
               </button>
             </div>
           </form>
+        </section>
+      )}
+
+      {showAutoLock && (
+        <section
+          className="about-panel auto-lock-panel"
+          aria-label="Auto-lock timer"
+        >
+          <div className="auto-lock-head">
+            <div>
+              <h2>Auto-lock</h2>
+              <p className="muted fine-inline">
+                Lock the vault after inactivity. Idle is checked roughly every
+                30 seconds, so locking can lag by up to half a minute.
+              </p>
+            </div>
+            <span className="auto-lock-now" aria-live="polite">
+              {autoLockSecs === 0
+                ? "Off"
+                : `Now: ${formatAutoLock(autoLockSecs)}`}
+            </span>
+          </div>
+          <div
+            className="auto-lock-presets"
+            role="group"
+            aria-label="Auto-lock presets"
+          >
+            {AUTO_LOCK_PRESETS.map((p) => (
+              <button
+                key={p.secs}
+                type="button"
+                className={autoLockSecs === p.secs ? "primary" : undefined}
+                disabled={busy}
+                title={
+                  p.secs === 0
+                    ? "Never auto-lock"
+                    : `Lock after ${p.label} of inactivity`
+                }
+                onClick={() => {
+                  void applyAutoLock(p.secs);
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="about-footer auto-lock-footer">
+            <span className="muted fine-inline about-footer-meta">
+              Off keeps notes open until you lock or quit. Existing stickies are
+              never touched by this setting.
+            </span>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setShowAutoLock(false)}
+            >
+              Done
+            </button>
+          </div>
         </section>
       )}
 

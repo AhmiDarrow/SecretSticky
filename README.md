@@ -29,12 +29,12 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 | **Vault** | Master password unlock; optional recovery key (shown once at setup) |
 | **Crypto** | Argon2id (64 MiB, t=3) + XChaCha20-Poly1305 AEAD |
 | **Keys** | Stable content key — change password without re-encrypting notes or killing recovery |
-| **Notes** | Multiple colored stickies (incl. black & dark green), always-on-top, high-contrast ink |
+| **Notes** | Multiple colored stickies (incl. black & dark green), per-note 📌 pin keeps a note on top (off by default), high-contrast ink |
 | **Tray** | New note · Show manager · Open all · Lock · Quit |
-| **UX** | Single instance (second launch focuses manager); close manager → tray; open a sticky → manager tucks away; Inter font (self-hosted) |
+| **UX** | Single instance (second launch focuses manager); close manager → tray; open a sticky → manager tucks away; every sticky has **New note / Manager / Lock**; Inter font (self-hosted) |
 | **Windows** | Manager default **440×560**; sticky min **345×250** (new notes **345×280**) |
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |
-| **Idle** | Auto-lock after inactivity (default 15 minutes) |
+| **Idle** | Auto-lock after inactivity — 15 min default, **Off–12 h** presets in the manager |
 | **Updates** | Signed auto-update from GitHub Releases (About → Check for updates) |
 | **About** | “Hi I'm Ahmi, hope this helps!” + profile / repo links |
 
@@ -93,7 +93,7 @@ Durable save path: write + flush temp → snapshot `.bak` → atomic replace int
 
 - Vault file at rest (disk theft, backups, casual snooping)
 - Authenticated encryption of note contents
-- IPC least-privilege: a sticky window cannot list vault admin actions or read another note’s body
+- IPC least-privilege: a sticky window cannot list vault admin actions or read another note’s body (it may only create a sibling note or lock the vault)
 
 ### Does **not** protect
 
@@ -132,9 +132,12 @@ npm run build         # Vite production bundle only
 - **Release** (`.github/workflows/release.yml`) — on tag `v*` (or manual dispatch): test gate, then signed Tauri NSIS/MSI + updater `latest.json`, draft GitHub Release.
 
 ```bash
-# After bumping version in package.json, Cargo.toml, tauri.conf.json + CHANGELOG
-git tag v<version>
-git push origin v<version>
+# Bump every version surface from one command (no hardcoded versions anywhere else)
+npm run bump:version -- <X.Y.Z>
+
+# Update CHANGELOG.md, commit to main, then tag and let the Release workflow build:
+git tag v<X.Y.Z>
+git push origin v<X.Y.Z>
 ```
 
 Requires repo secret `TAURI_SIGNING_PRIVATE_KEY` (see CONTRIBUTING).

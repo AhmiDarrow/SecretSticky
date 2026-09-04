@@ -36,3 +36,6 @@ src-tauri/icons/ios/
 vault.json
 
 # Cargo.lock is committed for app reproducibility
+
+# Local agent/house state
+.remedy-build/
