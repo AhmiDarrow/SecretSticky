@@ -8,12 +8,11 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+_HOME = Path.home()
 SRC_CANDIDATES = [
-    Path(r"C:\Users\Administrator\Desktop\SecretSticky-icon-preview.png"),
-    Path(
-        r"C:\Users\Administrator\.remedy\attachments"
-        r"\16136f6f-695e-4953-8858-22a1784faff3\remedy_comfy_00013_.png"
-    ),
+    _HOME / "Desktop" / "SecretSticky-icon-preview.png",
+    _HOME / ".remedy" / "attachments" / "16136f6f-695e-4953-8858-22a1784faff3" / "remedy_comfy_00013_.png",
+    ROOT / "app-icon.png",
 ]
 
 
