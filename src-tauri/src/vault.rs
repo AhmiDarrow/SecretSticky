@@ -237,6 +237,9 @@ pub struct Vault {
     path: PathBuf,
     file: Option<VaultFile>,
     session: Option<Session>,
+    /// Set when an idle lock happened inside a vault call (no UI teardown yet),
+    /// so the app layer can still close stickies and raise the unlock screen.
+    idle_lock_needs_ui: bool,
 }
 
 impl Vault {
@@ -254,10 +257,8 @@ impl Vault {
         // builds) but a sibling `.bak` exists, restore it — never treat that as
         // "uninitialized" and allow setup to mint an empty vault over secrets.
         let bak = backup_path_for(&path);
-        if !path.exists() {
-            if bak.exists() {
-                restore_backup(&bak, &path)?;
-            }
+        if !path.exists() && bak.exists() {
+            restore_backup(&bak, &path)?;
         }
 
         let file = if path.exists() {
@@ -269,7 +270,10 @@ impl Vault {
                     if bak.exists() {
                         match load_vault_file(&bak) {
                             Ok(f) => {
-                                // Best-effort restore so next boot uses the good copy.
+                                // Keep the unreadable file aside for offline recovery
+                                // instead of overwriting it, then restore the good copy
+                                // so the next boot (and next save) uses it.
+                                let _ = fs::copy(&path, corrupt_path_for(&path));
                                 let _ = restore_backup(&bak, &path);
                                 Some(f)
                             }
@@ -287,6 +291,7 @@ impl Vault {
             path,
             file,
             session: None,
+            idle_lock_needs_ui: false,
         })
     }
 
@@ -317,7 +322,12 @@ impl Vault {
         }
     }
 
+    /// Refresh idle activity. Once the idle deadline has passed, activity can
+    /// no longer revive the session — the pending auto-lock must happen.
     pub fn touch(&mut self) {
+        if self.is_idle_lock_due() {
+            return;
+        }
         if let Some(s) = &mut self.session {
             s.last_activity = Instant::now();
         }
@@ -336,17 +346,29 @@ impl Vault {
     }
 
     /// Returns true if session was locked due to idle.
+    ///
+    /// Locks the session immediately (fail closed) and remembers that the UI
+    /// still has to be torn down — see [`Vault::take_idle_lock_needs_ui`].
     pub fn check_idle_lock(&mut self) -> bool {
         if self.is_idle_lock_due() {
-            self.lock();
+            self.session = None;
+            self.idle_lock_needs_ui = true;
             true
         } else {
             false
         }
     }
 
+    /// True once after an idle lock that happened inside a vault call, so the
+    /// periodic idle check can still close open stickies (whose plaintext is
+    /// on screen) and show the unlock screen.
+    pub fn take_idle_lock_needs_ui(&mut self) -> bool {
+        std::mem::take(&mut self.idle_lock_needs_ui)
+    }
+
     pub fn lock(&mut self) {
         self.session = None;
+        self.idle_lock_needs_ui = false;
     }
 
     /// Write vault to disk via temp + replace.
@@ -812,7 +834,17 @@ impl Vault {
         // recovery, OR re-wrap recovery under new salt (needs recovery secret).
         // Keep salt stable so recovery key continues to work; only rotate the
         // password-derived wrap. (Salt is not secret; password strength is.)
-        let new_pw_key = derive_key(new_password, &salt, ARGON2_M_KIB, ARGON2_T, ARGON2_P)?;
+        //
+        // KDF params are shared with the recovery path (one set in the header),
+        // so keep the vault's existing params: rewriting them would leave the
+        // recovery key deriving with params it was not created under.
+        let new_pw_key = derive_key(
+            new_password,
+            &salt,
+            file.header.argon2_m_kib,
+            file.header.argon2_t,
+            file.header.argon2_p,
+        )?;
         let wrapped_by_password =
             encrypt(&new_pw_key, content_key.as_bytes(), b"secretsticky-pw-wrap")?;
         let new_verifier = encrypt(&new_pw_key, b"secretsticky-ok", b"secretsticky-verifier")?;
@@ -823,9 +855,7 @@ impl Vault {
             let f = self.file.as_mut().ok_or(AppError::NotInitialized)?;
             f.header.verifier_b64 = B64.encode(new_verifier);
             f.header.password_wrapped_key_b64 = Some(B64.encode(wrapped_by_password));
-            f.header.argon2_m_kib = ARGON2_M_KIB;
-            f.header.argon2_t = ARGON2_T;
-            f.header.argon2_p = ARGON2_P;
+            // argon2_* unchanged — shared with recovery_verifier / wrapped_master.
             // salt_b64 unchanged — recovery derive_key(recovery, salt) still works.
             // wrapped_master_b64 / recovery_verifier_b64 unchanged.
         }
@@ -867,6 +897,11 @@ impl Vault {
 
 fn backup_path_for(path: &Path) -> PathBuf {
     path.with_extension("json.bak")
+}
+
+/// Where an unreadable live vault is set aside before restoring from `.bak`.
+fn corrupt_path_for(path: &Path) -> PathBuf {
+    path.with_extension("json.corrupt")
 }
 
 fn load_vault_file(path: &Path) -> AppResult<VaultFile> {
@@ -1034,8 +1069,13 @@ impl UnlockThrottle {
     }
 
     fn evict_stale(&mut self) {
-        let cutoff = Instant::now() - Duration::from_secs(Self::WINDOW_SECS);
-        self.failures.retain(|t| *t > cutoff);
+        // `Instant - Duration` panics when the monotonic clock is younger than
+        // the window (e.g. an unlock attempt shortly after boot). A panic here
+        // would poison the throttle mutex and block every later unlock.
+        // If the clock is younger than the window, every failure is recent.
+        if let Some(cutoff) = Instant::now().checked_sub(Duration::from_secs(Self::WINDOW_SECS)) {
+            self.failures.retain(|t| *t > cutoff);
+        }
     }
 }
 
@@ -2004,12 +2044,17 @@ mod tests {
     fn touch_resets_idle_timer() {
         let (_dir, mut v) = test_vault();
         v.setup("password1234").unwrap();
-        v.set_idle_lock_secs(2).unwrap();
+        v.set_idle_lock_secs(10).unwrap();
+        // Close to (but not past) the deadline: touch must push it back out.
         if let Some(s) = v.session.as_mut() {
-            s.last_activity = Instant::now() - Duration::from_secs(5);
+            s.last_activity = Instant::now() - Duration::from_secs(8);
         }
-        // Without touch, idle would lock; touch refreshes activity.
         v.touch();
+        let elapsed = v.session.as_ref().unwrap().last_activity.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "touch must refresh activity"
+        );
         assert!(!v.check_idle_lock());
         assert!(v.status().unlocked);
     }
@@ -2158,6 +2203,134 @@ mod tests {
         let got = v.get_note(&note_id).unwrap();
         assert_eq!(got.title, "legacy");
         assert_eq!(got.body, "body");
+    }
+
+    #[test]
+    fn touch_after_idle_deadline_does_not_revive_session() {
+        let (_dir, mut v) = test_vault();
+        v.setup("password1234").unwrap();
+        v.set_idle_lock_secs(1).unwrap();
+        if let Some(s) = v.session.as_mut() {
+            s.last_activity = Instant::now() - Duration::from_secs(5);
+        }
+        v.touch();
+        assert!(
+            v.is_idle_lock_due(),
+            "activity after the deadline must not postpone auto-lock"
+        );
+    }
+
+    #[test]
+    fn idle_lock_inside_vault_call_flags_ui_teardown_once() {
+        let (_dir, mut v) = test_vault();
+        v.setup("password1234").unwrap();
+        let id = v.create_note(None).unwrap().id;
+        v.set_idle_lock_secs(1).unwrap();
+        if let Some(s) = v.session.as_mut() {
+            s.last_activity = Instant::now() - Duration::from_secs(5);
+        }
+        // A sticky save after the deadline locks inside the vault call...
+        assert!(matches!(v.get_note(&id), Err(AppError::Locked)));
+        assert!(!v.status().unlocked);
+        // ...and the app layer is told exactly once to close stickies.
+        assert!(v.take_idle_lock_needs_ui());
+        assert!(!v.take_idle_lock_needs_ui());
+    }
+
+    #[test]
+    fn manual_lock_clears_pending_idle_ui_flag() {
+        let (_dir, mut v) = test_vault();
+        v.setup("password1234").unwrap();
+        v.set_idle_lock_secs(1).unwrap();
+        if let Some(s) = v.session.as_mut() {
+            s.last_activity = Instant::now() - Duration::from_secs(5);
+        }
+        assert!(v.check_idle_lock());
+        v.lock();
+        assert!(!v.take_idle_lock_needs_ui());
+    }
+
+    #[test]
+    fn change_password_keeps_vault_kdf_params_for_recovery() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("vault.json");
+        // Build a vault whose header uses non-default (cheaper) KDF params,
+        // as an older or future build might have written.
+        let recovery = {
+            let mut v = Vault::open_path(path.clone()).unwrap();
+            v.setup("password1234").unwrap()
+        };
+        let raw = fs::read_to_string(&path).unwrap();
+        let mut file: VaultFile = serde_json::from_str(&raw).unwrap();
+        let salt = B64.decode(&file.header.salt_b64).unwrap();
+        let (m, t, p) = (8 * 1024, 1, 1);
+        let rkey = derive_key(
+            &normalize_recovery_key(&recovery),
+            &salt,
+            ARGON2_M_KIB,
+            ARGON2_T,
+            ARGON2_P,
+        )
+        .unwrap();
+        let content = crypto::decrypt(
+            &rkey,
+            &B64.decode(file.header.wrapped_master_b64.as_ref().unwrap())
+                .unwrap(),
+            b"secretsticky-wrap",
+        )
+        .unwrap();
+        let content = MasterKey::from_slice(&content).unwrap();
+        let pw = derive_key("password1234", &salt, m, t, p).unwrap();
+        let rk = derive_key(&normalize_recovery_key(&recovery), &salt, m, t, p).unwrap();
+        file.header.argon2_m_kib = m;
+        file.header.argon2_t = t;
+        file.header.argon2_p = p;
+        file.header.verifier_b64 =
+            B64.encode(encrypt(&pw, b"secretsticky-ok", b"secretsticky-verifier").unwrap());
+        file.header.password_wrapped_key_b64 =
+            Some(B64.encode(encrypt(&pw, content.as_bytes(), b"secretsticky-pw-wrap").unwrap()));
+        file.header.recovery_verifier_b64 =
+            Some(B64.encode(
+                encrypt(&rk, b"secretsticky-recovery-ok", b"secretsticky-recovery").unwrap(),
+            ));
+        file.header.wrapped_master_b64 =
+            Some(B64.encode(encrypt(&rk, content.as_bytes(), b"secretsticky-wrap").unwrap()));
+        fs::write(&path, serde_json::to_string_pretty(&file).unwrap()).unwrap();
+
+        let mut v = Vault::open_path(path.clone()).unwrap();
+        v.unlock("password1234").unwrap();
+        v.change_password("password1234", "new-password-456")
+            .unwrap();
+        v.lock();
+        v.unlock("new-password-456").unwrap();
+        v.lock();
+        v.unlock_with_recovery(&recovery)
+            .expect("recovery key must keep working after a password change");
+    }
+
+    #[test]
+    fn corrupt_live_vault_is_kept_aside_when_restoring_bak() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("vault.json");
+        {
+            let mut v = Vault::open_path(path.clone()).unwrap();
+            v.setup("password1234").unwrap();
+            v.create_note(None).unwrap();
+        }
+        fs::write(&path, "{not-json").unwrap();
+        let v2 = Vault::open_path(path.clone()).unwrap();
+        assert!(v2.status().initialized);
+        let corrupt = corrupt_path_for(&path);
+        assert_eq!(fs::read_to_string(corrupt).unwrap(), "{not-json");
+    }
+
+    #[test]
+    fn unlock_throttle_evict_never_panics() {
+        // Exercise eviction directly; must be safe regardless of clock age.
+        let mut t = UnlockThrottle::new();
+        t.failures.push(Instant::now());
+        t.evict_stale();
+        assert_eq!(t.failures.len(), 1);
     }
 
     #[test]

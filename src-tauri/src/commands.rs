@@ -100,7 +100,8 @@ pub fn vault_status(
     Ok(v.status())
 }
 
-#[tauri::command]
+// Off the main thread: Argon2id takes ~1s and would freeze every window.
+#[tauri::command(async)]
 pub fn vault_setup(
     window: tauri::WebviewWindow,
     state: State<'_, VaultState>,
@@ -114,7 +115,8 @@ pub fn vault_setup(
     v.setup(&password)
 }
 
-#[tauri::command]
+// Off the main thread: Argon2id takes ~1s and would freeze every window.
+#[tauri::command(async)]
 pub fn vault_unlock(
     window: tauri::WebviewWindow,
     state: State<'_, VaultState>,
@@ -156,7 +158,8 @@ pub fn vault_unlock(
     }
 }
 
-#[tauri::command]
+// Off the main thread: Argon2id takes ~1s and would freeze every window.
+#[tauri::command(async)]
 pub fn vault_unlock_recovery(
     window: tauri::WebviewWindow,
     state: State<'_, VaultState>,
@@ -198,7 +201,9 @@ pub fn vault_unlock_recovery(
     }
 }
 
-#[tauri::command]
+// Off the main thread: sync commands run on the main thread, and the grace
+// sleep below would block the very sticky saves it is waiting for.
+#[tauri::command(async)]
 pub fn vault_lock(
     app: AppHandle,
     window: tauri::WebviewWindow,
@@ -256,16 +261,19 @@ pub fn vault_touch(window: tauri::WebviewWindow, state: State<'_, VaultState>) -
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_check_idle(app: AppHandle, state: State<'_, VaultState>) -> AppResult<bool> {
     // If idle is due, use the same pre-lock grace as manual lock so debounced
     // sticky saves (400ms) can land before windows are destroyed.
+    // Also tear down the UI when a vault call already idle-locked the session
+    // (otherwise open stickies would keep showing plaintext while locked).
     let due = {
-        let v = state
+        let mut v = state
             .vault
             .lock()
             .map_err(|e| AppError::Message(e.to_string()))?;
-        v.is_idle_lock_due()
+        let needs_ui = v.take_idle_lock_needs_ui();
+        v.is_idle_lock_due() || needs_ui
     };
     if due {
         vault_lock_inner(&app, &state)?;
@@ -550,7 +558,8 @@ pub fn set_idle_lock_secs(
     v.set_idle_lock_secs(secs)
 }
 
-#[tauri::command]
+// Off the main thread: Argon2id takes ~1s and would freeze every window.
+#[tauri::command(async)]
 pub fn change_password(
     window: tauri::WebviewWindow,
     state: State<'_, VaultState>,

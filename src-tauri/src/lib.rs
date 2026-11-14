@@ -122,7 +122,12 @@ pub fn run() {
                         }
                     }
                     "lock" => {
-                        let _ = vault_lock_from_tray(app, &app.state::<VaultState>());
+                        // Menu events run on the main thread; lock off it so the
+                        // pre-lock grace period lets stickies flush their saves.
+                        let app = app.clone();
+                        std::thread::spawn(move || {
+                            let _ = vault_lock_from_tray(&app, &app.state::<VaultState>());
+                        });
                     }
                     "quit" => {
                         request_quit(app);
@@ -142,8 +147,9 @@ pub fn run() {
                 .build(app)?;
 
             let handle = app.handle().clone();
+            // Short tick so auto-lock fires within a few seconds of the deadline.
             std::thread::spawn(move || loop {
-                std::thread::sleep(Duration::from_secs(30));
+                std::thread::sleep(Duration::from_secs(5));
                 let state = handle.state::<VaultState>();
                 let _ = vault_check_idle(handle.clone(), state);
             });

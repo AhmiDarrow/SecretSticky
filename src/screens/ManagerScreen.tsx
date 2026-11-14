@@ -483,8 +483,8 @@ export function ManagerScreen({ onLock }: Props) {
             <div>
               <h2>Auto-lock</h2>
               <p className="muted fine-inline">
-                Lock the vault after inactivity. Idle is checked roughly every
-                30 seconds, so locking can lag by up to half a minute.
+                Lock the vault after inactivity. Idle is checked every few
+                seconds, so locking can lag slightly behind the timer.
               </p>
             </div>
             <span className="auto-lock-now" aria-live="polite">
