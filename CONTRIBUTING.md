@@ -5,7 +5,7 @@ Thanks for helping harden a local secrets app. Keep changes small, tested, and h
 ## Prerequisites
 
 - Windows 10/11 (primary target)
-- Node.js 20+
+- Node.js 22+
 - Rust stable (edition 2021)
 - WebView2 (ships with modern Windows)
 
