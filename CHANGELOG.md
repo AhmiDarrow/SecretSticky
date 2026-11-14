@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-11-14
+
+### Fixed
+
+- **Auto-lock:** stickies are now closed when the vault auto-locks during a save or other action, instead of staying open on screen with their contents visible while the vault is locked
+- **Auto-lock:** activity after the auto-lock deadline no longer cancels a lock that is already due; the idle timer is also checked every few seconds instead of every 30 seconds
+- **Lock:** locking from the manager, a sticky, or the tray now reliably saves the last keystrokes in open stickies before they close
+- **Unlock:** trying to unlock within about a minute of Windows starting could crash the unlock rate limiter and block every further unlock until SecretSticky was restarted
+- **Change password:** changing the master password now keeps the vault's key-derivation settings, so the recovery key keeps working even for vaults created with different settings
+- Unlocking, creating a vault, and changing the password no longer freeze all windows while the key is derived
+
+### Security
+
+- If `vault.json` is unreadable and SecretSticky restores from `vault.json.bak`, the unreadable file is now kept as `vault.json.corrupt` for offline recovery instead of being overwritten
+- Updated bundled TLS components used by the auto-updater (rustls, webpki) to patched releases
+
 ## [0.1.7] — 2026-09-03
 
 ### Added
