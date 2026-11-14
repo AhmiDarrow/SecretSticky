@@ -60,7 +60,7 @@ npm run tauri:dev      # development
 npm run tauri:build    # release installers under src-tauri/target/release/bundle/
 ```
 
-**Requirements:** Windows 10/11, Node 20+, Rust stable, WebView2.
+**Requirements:** Windows 10/11, Node 22+, Rust stable, WebView2.
 
 ## Quick start
 
