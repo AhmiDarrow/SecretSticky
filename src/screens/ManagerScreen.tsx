@@ -3,6 +3,17 @@ import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { clearClipboard } from "../clipboard";
+import {
+  AUTO_LOCK_PRESET_SECS,
+  errorText,
+  formatDuration,
+  formatNumber,
+  LOCALES,
+  localizeMessage,
+  pluralCategory,
+  Template,
+  useI18n,
+} from "../i18n";
 import { COLORS, type NotePreviewDto } from "../types";
 import {
   checkForAppUpdate,
@@ -17,26 +28,10 @@ const GITHUB_RELEASES = "https://github.com/AhmiDarrow/SecretSticky/releases";
 /** Backend default: 15 minutes. Used until the live status arrives. */
 const DEFAULT_AUTO_LOCK_SECS = 15 * 60;
 
-/** Auto-lock presets — Off … 12 h. These are the only values the UI sends. */
-const AUTO_LOCK_PRESETS: ReadonlyArray<{ secs: number; label: string }> = [
-  { secs: 0, label: "Off" },
-  { secs: 60, label: "1 min" },
-  { secs: 300, label: "5 min" },
-  { secs: 900, label: "15 min" },
-  { secs: 1800, label: "30 min" },
-  { secs: 3600, label: "1 hr" },
-  { secs: 7200, label: "2 hr" },
-  { secs: 14400, label: "4 hr" },
-  { secs: 28800, label: "8 hr" },
-  { secs: 43200, label: "12 hr" },
-];
-
-function formatAutoLock(secs: number): string {
-  if (!Number.isFinite(secs) || secs <= 0) return "Off";
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins} min`;
-  const hrs = mins / 60;
-  return `${hrs % 1 === 0 ? hrs : hrs.toFixed(1)} hr${hrs === 1 ? "" : "s"}`;
+type Tone = "ok" | "err" | "busy";
+interface ToneMsg {
+  tone: Tone;
+  text: string;
 }
 
 interface Props {
@@ -44,6 +39,7 @@ interface Props {
 }
 
 export function ManagerScreen({ onLock }: Props) {
+  const { t, locale, setLocale } = useI18n();
   const [notes, setNotes] = useState<NotePreviewDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,17 +47,25 @@ export function ManagerScreen({ onLock }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showAutoLock, setShowAutoLock] = useState(false);
+  const [showLanguage, setShowLanguage] = useState(false);
   const [autoLockSecs, setAutoLockSecs] = useState<number>(DEFAULT_AUTO_LOCK_SECS);
   const [deleteTarget, setDeleteTarget] = useState<NotePreviewDto | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
-  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [pwMsg, setPwMsg] = useState<ToneMsg | null>(null);
   const [appVersion, setAppVersion] = useState<string>("…");
-  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [updateMsg, setUpdateMsg] = useState<ToneMsg | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [pendingVersion, setPendingVersion] = useState<string | null>(null);
+
+  const showError = (err: unknown) => {
+    setError(localizeMessage(errorText(err), locale, t));
+  };
+
+  const colorName = (id: string) => t(`color.${id}`);
+  const noteTitle = (title: string) => title.trim() || t("notes.untitled");
 
   const refresh = useCallback(async () => {
     try {
@@ -69,9 +73,9 @@ export function ManagerScreen({ onLock }: Props) {
       setNotes(list);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(localizeMessage(errorText(e), locale, t));
     }
-  }, []);
+  }, [locale, t]);
 
   useEffect(() => {
     refresh();
@@ -98,12 +102,21 @@ export function ManagerScreen({ onLock }: Props) {
     try {
       const result = await checkForAppUpdate();
       if (result.kind === "up-to-date") {
-        setUpdateMsg(`You're on the latest version (${appVersion}).`);
+        setUpdateMsg({
+          tone: "ok",
+          text: t("update.upToDate", { version: appVersion }),
+        });
       } else if (result.kind === "available") {
         setPendingVersion(result.version);
-        setUpdateMsg(`Update ${result.version} is ready to install.`);
+        setUpdateMsg({
+          tone: "ok",
+          text: t("update.ready", { version: result.version }),
+        });
       } else {
-        setUpdateMsg(result.message);
+        setUpdateMsg({
+          tone: "err",
+          text: localizeMessage(result.message, locale, t),
+        });
       }
     } finally {
       setUpdateBusy(false);
@@ -112,36 +125,42 @@ export function ManagerScreen({ onLock }: Props) {
 
   const runUpdateInstall = async () => {
     setUpdateBusy(true);
-    setUpdateMsg("Downloading update…");
+    setUpdateMsg({ tone: "busy", text: t("update.downloading") });
     try {
       const ok = await downloadAndInstallUpdate((pct) => {
         if (pct == null) {
-          setUpdateMsg("Downloading update…");
+          setUpdateMsg({ tone: "busy", text: t("update.downloading") });
         } else {
-          setUpdateMsg(`Downloading update… ${pct}%`);
+          setUpdateMsg({
+            tone: "busy",
+            text: t("update.downloadingPct", { pct: formatNumber(locale, pct) }),
+          });
         }
       });
       if (!ok) {
-        setUpdateMsg(`You're on the latest version (${appVersion}).`);
+        setUpdateMsg({
+          tone: "ok",
+          text: t("update.upToDate", { version: appVersion }),
+        });
         setPendingVersion(null);
       }
-      // relaunch() exits the process on success
     } catch (e) {
-      setUpdateMsg(String(e));
+      setUpdateMsg({
+        tone: "err",
+        text: localizeMessage(errorText(e), locale, t),
+      });
     } finally {
       setUpdateBusy(false);
     }
   };
 
   const create = (color?: string) => {
-    // Fire-and-forget: Rust returns after vault write; sticky window opens async.
-    // Do not block manager UI / other color clicks.
     setCreating(true);
     setError(null);
     void api
       .createNote(color as never)
       .then(() => refresh())
-      .catch((e) => setError(String(e)))
+      .catch((e) => showError(e))
       .finally(() => setCreating(false));
   };
 
@@ -149,12 +168,10 @@ export function ManagerScreen({ onLock }: Props) {
     setBusy(true);
     try {
       await clearClipboard();
-      // Backend vault_lock waits ~500ms after vault-about-to-lock so stickies
-      // can flush their 400ms debounce; no extra client delay needed here.
       await api.lock();
       await onLock();
     } catch (e) {
-      setError(String(e));
+      showError(e);
     } finally {
       setBusy(false);
     }
@@ -165,11 +182,11 @@ export function ManagerScreen({ onLock }: Props) {
     setPwMsg(null);
     setError(null);
     if (newPw.length < 12) {
-      setPwMsg("New password must be at least 12 characters.");
+      setPwMsg({ tone: "err", text: t("password.errShort") });
       return;
     }
     if (newPw !== confirmPw) {
-      setPwMsg("New passwords do not match.");
+      setPwMsg({ tone: "err", text: t("password.errMismatch") });
       return;
     }
     setBusy(true);
@@ -178,17 +195,19 @@ export function ManagerScreen({ onLock }: Props) {
       setCurrentPw("");
       setNewPw("");
       setConfirmPw("");
-      setPwMsg("Password updated. Recovery key is unchanged.");
+      setPwMsg({ tone: "ok", text: t("password.updated") });
       setShowPassword(false);
     } catch (err) {
-      setPwMsg(String(err));
+      setPwMsg({
+        tone: "err",
+        text: localizeMessage(errorText(err), locale, t),
+      });
     } finally {
       setBusy(false);
     }
   };
 
   const applyAutoLock = async (secs: number) => {
-    // Sanitize client-side too: finite, integer, 0 ..= 12 h only.
     const safe = Number.isFinite(secs)
       ? Math.min(Math.max(Math.round(secs), 0), 12 * 3600)
       : 0;
@@ -198,7 +217,7 @@ export function ManagerScreen({ onLock }: Props) {
       await api.setIdleLockSecs(safe);
       setAutoLockSecs(safe);
     } catch (e) {
-      setError(String(e));
+      showError(e);
     } finally {
       setBusy(false);
     }
@@ -213,10 +232,18 @@ export function ManagerScreen({ onLock }: Props) {
       setDeleteTarget(null);
       await refresh();
     } catch (e) {
-      setError(String(e));
+      showError(e);
     } finally {
       setDeleting(false);
     }
+  };
+
+  const closePanels = () => {
+    setShowAbout(false);
+    setShowPassword(false);
+    setShowAutoLock(false);
+    setShowLanguage(false);
+    setDeleteTarget(null);
   };
 
   return (
@@ -233,38 +260,32 @@ export function ManagerScreen({ onLock }: Props) {
           />
           <div className="brand-text">
             <h1>SecretSticky</h1>
-            <p className="muted">Encrypted sticky notes</p>
+            <p className="muted">{t("manager.tagline")}</p>
           </div>
         </div>
         <div className="header-actions">
           <button
             type="button"
             onClick={() => {
-              setShowAbout((v) => !v);
-              if (!showAbout) {
-                setShowPassword(false);
-                setShowAutoLock(false);
-                setDeleteTarget(null);
-              }
+              const next = !showAbout;
+              closePanels();
+              setShowAbout(next);
             }}
             disabled={busy}
           >
-            About
+            {t("manager.about")}
           </button>
           <button
             type="button"
             onClick={() => {
-              setShowPassword((v) => !v);
+              const next = !showPassword;
+              closePanels();
               setPwMsg(null);
-              if (!showPassword) {
-                setShowAbout(false);
-                setShowAutoLock(false);
-                setDeleteTarget(null);
-              }
+              setShowPassword(next);
             }}
             disabled={busy}
           >
-            Password
+            {t("manager.password")}
           </button>
           <button
             type="button"
@@ -272,36 +293,43 @@ export function ManagerScreen({ onLock }: Props) {
             className={autoLockSecs === 0 ? undefined : "primary"}
             title={
               autoLockSecs === 0
-                ? "Auto-lock is off"
-                : `Auto-lock after ${formatAutoLock(autoLockSecs)} of inactivity`
+                ? t("autoLock.titleOff")
+                : t("autoLock.titleAfter", {
+                    duration: formatDuration(locale, autoLockSecs, t),
+                  })
             }
             onClick={() => {
-              setShowAutoLock((v) => !v);
-              if (!showAutoLock) {
-                setShowAbout(false);
-                setShowPassword(false);
-                setDeleteTarget(null);
-              }
+              const next = !showAutoLock;
+              closePanels();
+              setShowAutoLock(next);
             }}
             disabled={busy}
           >
-            Auto-lock
+            {t("manager.autoLock")}
           </button>
           <button
             type="button"
-            onClick={() => api.openAll()}
+            aria-expanded={showLanguage}
+            onClick={() => {
+              const next = !showLanguage;
+              closePanels();
+              setShowLanguage(next);
+            }}
             disabled={busy}
           >
-            Open all
+            {t("manager.language")}
+          </button>
+          <button type="button" onClick={() => api.openAll()} disabled={busy}>
+            {t("manager.openAll")}
           </button>
           <button type="button" className="danger" onClick={lock} disabled={busy}>
-            Lock
+            {t("manager.lock")}
           </button>
         </div>
       </header>
 
       {showAbout && (
-        <section className="about-panel" aria-label="About SecretSticky">
+        <section className="about-panel" aria-label={t("about.aria")}>
           <div className="about-row">
             <img
               className="about-mark"
@@ -312,45 +340,37 @@ export function ManagerScreen({ onLock }: Props) {
               draggable={false}
             />
             <div className="about-body">
-              <h2>About</h2>
-              <p className="about-hello">Hi I&apos;m Ahmi, hope this helps!</p>
-              <p className="muted fine-inline">
-                Local-only encrypted sticky notes for Windows. MIT licensed.
-              </p>
+              <h2>{t("about.title")}</h2>
+              <p className="about-hello">{t("about.hello")}</p>
+              <p className="muted fine-inline">{t("about.blurb")}</p>
               <p className="muted fine-inline about-version">
-                Version {appVersion}
+                {t("about.version", { version: appVersion })}
               </p>
               <div className="about-links">
                 <button
                   type="button"
                   className="primary"
                   onClick={() => {
-                    void api.openExternalUrl(GITHUB_PROFILE).catch((e) =>
-                      setError(String(e)),
-                    );
+                    void api.openExternalUrl(GITHUB_PROFILE).catch((e) => showError(e));
                   }}
                 >
-                  GitHub profile
+                  {t("about.githubProfile")}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    void api.openExternalUrl(GITHUB_REPO).catch((e) =>
-                      setError(String(e)),
-                    );
+                    void api.openExternalUrl(GITHUB_REPO).catch((e) => showError(e));
                   }}
                 >
-                  Project repo
+                  {t("about.projectRepo")}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    void api.openExternalUrl(GITHUB_RELEASES).catch((e) =>
-                      setError(String(e)),
-                    );
+                    void api.openExternalUrl(GITHUB_RELEASES).catch((e) => showError(e));
                   }}
                 >
-                  Releases
+                  {t("about.releases")}
                 </button>
               </div>
               <div className="about-update">
@@ -362,8 +382,8 @@ export function ManagerScreen({ onLock }: Props) {
                   }}
                 >
                   {updateBusy && !pendingVersion
-                    ? "Checking…"
-                    : "Check for updates"}
+                    ? t("about.checking")
+                    : t("about.checkUpdates")}
                 </button>
                 {pendingVersion && (
                   <button
@@ -375,33 +395,34 @@ export function ManagerScreen({ onLock }: Props) {
                     }}
                   >
                     {updateBusy
-                      ? "Installing…"
-                      : `Install ${pendingVersion} & restart`}
+                      ? t("about.installing")
+                      : t("about.installRestart", { version: pendingVersion })}
                   </button>
                 )}
               </div>
               {updateMsg && (
                 <p
                   className={
-                    updateMsg.startsWith("You're on") ||
-                    updateMsg.startsWith("Update ")
+                    updateMsg.tone === "ok"
                       ? "ok fine-inline"
-                      : "error fine-inline"
+                      : updateMsg.tone === "err"
+                        ? "error fine-inline"
+                        : "fine-inline"
                   }
                 >
-                  {updateMsg}
+                  {updateMsg.text}
                 </p>
               )}
               <div className="about-footer">
                 <span className="muted fine-inline about-footer-meta">
-                  Local vault · no cloud
+                  {t("about.localVault")}
                 </span>
                 <button
                   type="button"
                   className="ghost"
                   onClick={() => setShowAbout(false)}
                 >
-                  Close
+                  {t("common.close")}
                 </button>
               </div>
             </div>
@@ -411,13 +432,11 @@ export function ManagerScreen({ onLock }: Props) {
 
       {showPassword && (
         <section className="password-panel">
-          <h2>Change master password</h2>
-          <p className="muted fine-inline">
-            Re-wraps the vault key. Your recovery key stays valid.
-          </p>
+          <h2>{t("password.title")}</h2>
+          <p className="muted fine-inline">{t("password.blurb")}</p>
           <form className="password-form" onSubmit={changePassword}>
             <label>
-              Current password
+              {t("password.current")}
               <input
                 type="password"
                 autoComplete="current-password"
@@ -427,7 +446,7 @@ export function ManagerScreen({ onLock }: Props) {
               />
             </label>
             <label>
-              New password
+              {t("password.new")}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -437,7 +456,7 @@ export function ManagerScreen({ onLock }: Props) {
               />
             </label>
             <label>
-              Confirm new password
+              {t("password.confirm")}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -447,13 +466,11 @@ export function ManagerScreen({ onLock }: Props) {
               />
             </label>
             {pwMsg && (
-              <p className={pwMsg.startsWith("Password updated") ? "ok" : "error"}>
-                {pwMsg}
-              </p>
+              <p className={pwMsg.tone === "ok" ? "ok" : "error"}>{pwMsg.text}</p>
             )}
             <div className="password-actions">
               <button type="submit" className="primary" disabled={busy}>
-                {busy ? "Updating…" : "Update password"}
+                {busy ? t("password.updating") : t("password.submit")}
               </button>
               <button
                 type="button"
@@ -467,7 +484,7 @@ export function ManagerScreen({ onLock }: Props) {
                   setPwMsg(null);
                 }}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </form>
@@ -475,59 +492,86 @@ export function ManagerScreen({ onLock }: Props) {
       )}
 
       {showAutoLock && (
-        <section
-          className="about-panel auto-lock-panel"
-          aria-label="Auto-lock timer"
-        >
+        <section className="about-panel auto-lock-panel" aria-label={t("autoLock.aria")}>
           <div className="auto-lock-head">
             <div>
-              <h2>Auto-lock</h2>
-              <p className="muted fine-inline">
-                Lock the vault after inactivity. Idle is checked every few
-                seconds, so locking can lag slightly behind the timer.
-              </p>
+              <h2>{t("autoLock.title")}</h2>
+              <p className="muted fine-inline">{t("autoLock.blurb")}</p>
             </div>
             <span className="auto-lock-now" aria-live="polite">
               {autoLockSecs === 0
-                ? "Off"
-                : `Now: ${formatAutoLock(autoLockSecs)}`}
+                ? t("autoLock.off")
+                : t("autoLock.now", {
+                    duration: formatDuration(locale, autoLockSecs, t),
+                  })}
             </span>
           </div>
-          <div
-            className="auto-lock-presets"
-            role="group"
-            aria-label="Auto-lock presets"
-          >
-            {AUTO_LOCK_PRESETS.map((p) => (
+          <div className="auto-lock-presets" role="group" aria-label={t("autoLock.presetsAria")}>
+            {AUTO_LOCK_PRESET_SECS.map((secs) => (
               <button
-                key={p.secs}
+                key={secs}
                 type="button"
-                className={autoLockSecs === p.secs ? "primary" : undefined}
+                className={autoLockSecs === secs ? "primary" : undefined}
                 disabled={busy}
                 title={
-                  p.secs === 0
-                    ? "Never auto-lock"
-                    : `Lock after ${p.label} of inactivity`
+                  secs === 0
+                    ? t("autoLock.never")
+                    : t("autoLock.lockAfter", {
+                        duration: formatDuration(locale, secs, t),
+                      })
                 }
                 onClick={() => {
-                  void applyAutoLock(p.secs);
+                  void applyAutoLock(secs);
                 }}
               >
-                {p.label}
+                {formatDuration(locale, secs, t)}
               </button>
             ))}
           </div>
           <div className="about-footer auto-lock-footer">
             <span className="muted fine-inline about-footer-meta">
-              Off keeps notes open until you lock or quit. Existing stickies are
-              never touched by this setting.
+              {t("autoLock.footnote")}
             </span>
             <button
               type="button"
               className="ghost"
               onClick={() => setShowAutoLock(false)}
             >
-              Done
+              {t("autoLock.done")}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {showLanguage && (
+        <section className="about-panel" aria-label={t("language.aria")}>
+          <h2>{t("language.title")}</h2>
+          <p className="muted fine-inline">{t("language.blurb")}</p>
+          <div className="lang-grid" role="group" aria-label={t("language.aria")}>
+            {LOCALES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={locale === item.id ? "primary" : undefined}
+                aria-pressed={locale === item.id}
+                onClick={() => {
+                  void setLocale(item.id);
+                }}
+              >
+                {item.native}
+              </button>
+            ))}
+          </div>
+          <div className="about-footer">
+            <span className="muted fine-inline about-footer-meta">
+              {t("language.current")}: {LOCALES.find((item) => item.id === locale)?.native}
+            </span>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setShowLanguage(false)}
+            >
+              {t("common.close")}
             </button>
           </div>
         </section>
@@ -535,15 +579,15 @@ export function ManagerScreen({ onLock }: Props) {
 
       <section className="new-row">
         <div className="new-row-main">
-          <span className="label">New note</span>
-          <div className="swatches" aria-label="Note colors">
+          <span className="label">{t("notes.new")}</span>
+          <div className="swatches" aria-label={t("notes.colorsAria")}>
             {COLORS.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 className={`swatch${c.dark ? " dark-swatch" : ""}`}
-                title={c.label}
-                aria-label={`New ${c.label} note`}
+                title={colorName(c.id)}
+                aria-label={t("notes.newColor", { color: colorName(c.id) })}
                 style={{ background: c.css }}
                 disabled={busy}
                 onClick={() => create(c.id)}
@@ -551,45 +595,37 @@ export function ManagerScreen({ onLock }: Props) {
             ))}
           </div>
         </div>
-        {creating && <span className="muted fine-inline new-row-status">Opening sticky…</span>}
+        {creating && (
+          <span className="muted fine-inline new-row-status">{t("notes.opening")}</span>
+        )}
       </section>
 
       {error && <p className="error pad">{error}</p>}
 
       <ul className="note-list">
-        {notes.length === 0 && (
-          <li className="empty">No notes yet — pick a color to create one.</li>
-        )}
+        {notes.length === 0 && <li className="empty">{t("notes.empty")}</li>}
         {notes.map((n) => (
           <li key={n.id} className="note-row">
             <button
               type="button"
               className="note-open"
               onClick={() => {
-                // Fire-and-forget — Rust opens window async; manager stays live.
-                void api.openNote(n.id).catch((e) => setError(String(e)));
+                void api.openNote(n.id).catch((e) => showError(e));
               }}
             >
-              <span
-                className="dot"
-                style={{ background: n.color_css }}
-                aria-hidden
-              />
-              <span className="note-title">
-                {n.title.trim() || "Untitled note"}
-              </span>
+              <span className="dot" style={{ background: n.color_css }} aria-hidden />
+              <span className="note-title">{noteTitle(n.title)}</span>
               <span className="note-preview muted">
-                {n.color} · open to edit
+                {t("notes.openToEdit", { color: colorName(n.color) })}
               </span>
             </button>
             <button
               type="button"
               className="note-delete ghost danger"
-              title="Delete note"
-              aria-label={`Delete ${n.title.trim() || "Untitled note"}`}
+              title={t("notes.deleteTitle")}
+              aria-label={t("notes.deleteAria", { title: noteTitle(n.title) })}
               onClick={() => {
-                setShowAbout(false);
-                setShowPassword(false);
+                closePanels();
                 setDeleteTarget(n);
               }}
             >
@@ -602,27 +638,31 @@ export function ManagerScreen({ onLock }: Props) {
       <footer className="manager-footer">
         <div className="footer-meta">
           <span>
-            {notes.length} note{notes.length === 1 ? "" : "s"} · local vault
+            {t(`manager.count.${pluralCategory(locale, notes.length)}`, {
+              count: formatNumber(locale, notes.length),
+            })}
           </span>
-          <span className="muted">X → tray · stickies hide manager</span>
-          <span className="muted">Copy clears in 30s</span>
+          <span className="muted">{t("notes.trayHint")}</span>
+          <span className="muted">
+            {t("notes.copyClears", { seconds: formatNumber(locale, 30) })}
+          </span>
         </div>
         <div className="footer-actions">
           <button
             type="button"
             className="ghost"
-            title="Hide manager; app stays in the tray"
+            title={t("notes.hideTitle")}
             disabled={busy}
             onClick={() => {
               void api.hideMain();
             }}
           >
-            Hide to tray
+            {t("notes.hide")}
           </button>
           <button
             type="button"
             className="ghost danger"
-            title="Close all stickies and quit"
+            title={t("notes.quitTitle")}
             disabled={busy}
             onClick={() => {
               void clearClipboard().finally(() => {
@@ -630,7 +670,7 @@ export function ManagerScreen({ onLock }: Props) {
               });
             }}
           >
-            Quit
+            {t("common.quit")}
           </button>
         </div>
       </footer>
@@ -651,12 +691,18 @@ export function ManagerScreen({ onLock }: Props) {
             aria-describedby="delete-dialog-desc"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="delete-dialog-title">Delete note?</h2>
+            <h2 id="delete-dialog-title">{t("delete.title")}</h2>
             <p id="delete-dialog-desc" className="muted fine-inline">
-              <strong className="modal-note-name">
-                {deleteTarget.title.trim() || "Untitled note"}
-              </strong>{" "}
-              will be removed permanently from the vault.
+              <Template
+                text={t("delete.body")}
+                slots={{
+                  title: (
+                    <strong className="modal-note-name">
+                      {noteTitle(deleteTarget.title)}
+                    </strong>
+                  ),
+                }}
+              />
             </p>
             <div className="modal-actions">
               <button
@@ -665,7 +711,7 @@ export function ManagerScreen({ onLock }: Props) {
                 disabled={deleting}
                 onClick={() => setDeleteTarget(null)}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -675,7 +721,7 @@ export function ManagerScreen({ onLock }: Props) {
                   void confirmDelete();
                 }}
               >
-                {deleting ? "Deleting…" : "Delete"}
+                {deleting ? t("common.deleting") : t("common.delete")}
               </button>
             </div>
           </div>

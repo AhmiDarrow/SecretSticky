@@ -9,7 +9,7 @@
   --border: #3f3f46;
   --note-bg: #ffe566;
   --note-text: #1a1508;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Inter", "Segoe UI", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Malgun Gothic", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans CJK KR", "Noto Sans CJK SC", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.45;
   color: var(--text);
@@ -131,7 +131,7 @@ button.ghost {
 
 .boot-card,
 .gate-card {
-  width: min(380px, 100%);
+  width: min(420px, 100%);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -223,17 +223,21 @@ button.ghost {
 }
 
 .about-links {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.45rem;
 }
 
 .about-links button {
-  width: 100%;
+  flex: 1 1 7rem;
+  width: auto;
   min-width: 0;
   padding: 0.4rem 0.35rem;
   font-size: 12.5px;
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 
 .about-version {
@@ -346,16 +350,20 @@ button.ghost {
 }
 
 .header-actions {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
 }
 
 .header-actions button {
-  width: 100%;
+  flex: 1 1 5.5rem;
+  width: auto;
   min-width: 0;
   padding: 0.4rem 0.3rem;
   font-size: 12.5px;
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 
 .new-row {
@@ -481,8 +489,8 @@ button.ghost {
   color: var(--muted);
   font-size: 12px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .note-delete {
@@ -530,6 +538,7 @@ button.ghost {
 
 .footer-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
   flex-shrink: 0;
@@ -556,7 +565,7 @@ button.ghost {
 }
 
 .modal-dialog {
-  width: min(340px, 100%);
+  width: min(380px, 100%);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -576,6 +585,7 @@ button.ghost {
 
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.45rem;
   margin-top: 0.85rem;
@@ -641,6 +651,7 @@ button.danger-solid:hover {
 
 .password-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   margin-top: 0.25rem;
@@ -671,8 +682,10 @@ button.danger-solid:hover {
   border: 1px solid rgba(251, 191, 36, 0.25);
   border-radius: 999px;
   padding: 0.25rem 0.6rem;
-  white-space: nowrap;
-  flex-shrink: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+  flex-shrink: 1;
+  max-width: 100%;
 }
 
 .auto-lock-presets {
@@ -687,7 +700,9 @@ button.danger-solid:hover {
   min-width: 0;
   padding: 0.4rem 0.2rem;
   font-size: 12px;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 
 .auto-lock-footer {
@@ -778,7 +793,7 @@ button.danger-solid:hover {
   font-family: inherit;
   font-weight: 700;
   font-size: 15px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   outline: none;
   color: var(--note-text);
 }
@@ -795,7 +810,49 @@ button.danger-solid:hover {
   font-size: 14px;
   color: var(--note-text);
   line-height: 1.5;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
+}
+
+html[lang="ja"] .note-body,
+html[lang="ko"] .note-body,
+html[lang="zh-CN"] .note-body,
+html[lang="ja"] .note-title-input,
+html[lang="ko"] .note-title-input,
+html[lang="zh-CN"] .note-title-input {
+  letter-spacing: 0;
+  line-height: 1.65;
+}
+
+.lang-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  font-size: 13px;
+}
+
+.lang-select select {
+  font: inherit;
+  color: var(--text);
+  background: #2f3238;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  width: 100%;
+}
+
+.lang-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.lang-grid button {
+  flex: 1 1 8.5rem;
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 
 .note-body::placeholder,
