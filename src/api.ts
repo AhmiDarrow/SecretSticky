@@ -43,4 +43,7 @@ export const api = {
   hideMain: () => invoke<void>("hide_main"),
   quitApp: () => invoke<void>("quit_app"),
   openExternalUrl: (url: string) => invoke<void>("open_external_url", { url }),
+
+  getBoot: () => invoke<{ lang: string; ci: boolean }>("ui_get_boot"),
+  setLang: (lang: string) => invoke<string>("ui_set_lang", { lang }),
 };

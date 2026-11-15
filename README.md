@@ -36,6 +36,7 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |
 | **Idle** | Auto-lock after inactivity — 15 min default, **Off–12 h** presets in the manager |
 | **Updates** | Signed auto-update from GitHub Releases (About → Check for updates) |
+| **Language** | Follows Windows on first launch (English if unsupported). Switch anytime from the unlock screen, recovery screen, or manager → Language. Saved in `settings.json` (not inside the vault) and applied immediately, including the tray menu |
 | **About** | “Hi I'm Ahmi, hope this helps!” + profile / repo links |
 
 ## Install
@@ -76,7 +77,10 @@ npm run tauri:build    # release installers under src-tauri/target/release/bundl
 %APPDATA%\SecretSticky\
   vault.json      # encrypted note blobs + KDF params (no plaintext titles/bodies)
   vault.json.bak  # last-known-good copy (restored if live is missing/corrupt)
+  settings.json   # UI language only (not secrets). Unknown keys are kept
 ```
+
+`--home <dir>` (or `--home=<dir>`) uses that folder instead of `%APPDATA%\SecretSticky`. `SECRETSTICKY_HOME` does the same when the flag is absent. The flag wins. Auto-update relaunches with the same arguments, so a custom home stays in use.
 
 - **Encrypted:** note title, note body  
 - **Plaintext by design:** window geometry, color id, timestamps (so chrome can restore without unlock content)

@@ -109,5 +109,11 @@ describe("api invoke wrappers", () => {
     expect(invoke).toHaveBeenCalledWith("open_external_url", {
       url: "https://github.com/AhmiDarrow",
     });
+    invoke.mockResolvedValue({ lang: "de", ci: false });
+    await expect(api.getBoot()).resolves.toEqual({ lang: "de", ci: false });
+    expect(invoke).toHaveBeenCalledWith("ui_get_boot");
+    invoke.mockResolvedValue("ja");
+    await expect(api.setLang("ja")).resolves.toBe("ja");
+    expect(invoke).toHaveBeenCalledWith("ui_set_lang", { lang: "ja" });
   });
 });
