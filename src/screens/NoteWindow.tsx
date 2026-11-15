@@ -4,6 +4,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api } from "../api";
 import { clearClipboard, copySecret } from "../clipboard";
 import {
+  errorText,
+  formatNumber,
+  localizeMessage,
+  useI18n,
+} from "../i18n";
+import {
   COLORS,
   applyNoteTheme,
   type NoteColor,
@@ -15,6 +21,11 @@ interface Props {
 }
 
 export function NoteWindow({ noteId }: Props) {
+  const { t, locale } = useI18n();
+  const tRef = useRef(t);
+  const localeRef = useRef(locale);
+  tRef.current = t;
+  localeRef.current = locale;
   const [note, setNote] = useState<NoteDto | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -65,7 +76,9 @@ export function NoteWindow({ noteId }: Props) {
       setError(null);
       loadedOnce.current = true;
       try {
-        await winRef.current.setTitle(n.title.trim() || "Sticky note");
+        await winRef.current.setTitle(
+          n.title.trim() || tRef.current("note.windowTitle"),
+        );
       } catch {
         /* ignore */
       }
@@ -73,7 +86,9 @@ export function NoteWindow({ noteId }: Props) {
         bodyRef.current?.focus();
       }, 50);
     } catch (e) {
-      setError(String(e));
+      setError(
+        localizeMessage(errorText(e), localeRef.current, tRef.current),
+      );
     }
   }, [noteId]);
 
@@ -115,13 +130,17 @@ export function NoteWindow({ noteId }: Props) {
       });
       setSaved(true);
       try {
-        await winRef.current.setTitle(titleDraft.current.trim() || "Sticky note");
+        await winRef.current.setTitle(
+          titleDraft.current.trim() || tRef.current("note.windowTitle"),
+        );
       } catch {
         /* ignore */
       }
     } catch (e) {
       if (gen === saveGen.current) {
-        setError(String(e));
+        setError(
+          localizeMessage(errorText(e), localeRef.current, tRef.current),
+        );
       }
     }
   }, [noteId]);
@@ -205,16 +224,23 @@ export function NoteWindow({ noteId }: Props) {
 
   const doCopy = async (text: string, label: string) => {
     if (!text) {
-      setCopyHint("Nothing to copy");
+      setCopyHint(t("note.nothingToCopy"));
       window.setTimeout(() => setCopyHint(null), 1500);
       return;
     }
     const res = await copySecret(text, 30_000);
     if (!res.ok) {
-      setError(res.error ?? "Clipboard copy failed");
+      setError(
+        localizeMessage(
+          res.error ?? t("note.clipboardFailed"),
+          locale,
+          t,
+        ),
+      );
       return;
     }
-    setCopyHint(`${label} · clears in ${Math.round(res.clearedInMs / 1000)}s`);
+    const seconds = formatNumber(locale, Math.round(res.clearedInMs / 1000));
+    setCopyHint(t("note.copiedClears", { label, seconds }));
     window.setTimeout(() => setCopyHint(null), 2500);
   };
 
@@ -224,7 +250,7 @@ export function NoteWindow({ noteId }: Props) {
       setError(null);
       await api.createNote(note.color);
     } catch (e) {
-      setError(String(e));
+      setError(localizeMessage(errorText(e), locale, t));
     }
   };
 
@@ -233,7 +259,7 @@ export function NoteWindow({ noteId }: Props) {
       setError(null);
       await api.showMain();
     } catch (e) {
-      setError(String(e));
+      setError(localizeMessage(errorText(e), locale, t));
     }
   };
 
@@ -251,9 +277,15 @@ export function NoteWindow({ noteId }: Props) {
         /* already destroyed by the backend */
       }
     } catch (e) {
-      setError(String(e));
+      setError(localizeMessage(errorText(e), locale, t));
     }
   };
+
+  useEffect(() => {
+    if (!note) return;
+    if (titleDraft.current.trim()) return;
+    void winRef.current.setTitle(t("note.windowTitle")).catch(() => {});
+  }, [locale, note, t]);
 
   if (error && !note) {
     return (
@@ -264,7 +296,7 @@ export function NoteWindow({ noteId }: Props) {
             <button
               type="button"
               className="ghost no-drag"
-              title="Close"
+              title={t("note.close")}
               onClick={() => winRef.current.close()}
             >
               ✕
@@ -273,7 +305,7 @@ export function NoteWindow({ noteId }: Props) {
         </div>
         <p className="error pad">{error}</p>
         <p className="pad muted">
-          Close this window and open the note again from the manager.
+          {t("note.closeHint")}
         </p>
       </div>
     );
@@ -282,7 +314,7 @@ export function NoteWindow({ noteId }: Props) {
   if (!note) {
     return (
       <div className="note-shell">
-        <p className="pad muted">Loading…</p>
+        <p className="pad muted">{t("boot.loading")}</p>
       </div>
     );
   }
@@ -304,7 +336,7 @@ export function NoteWindow({ noteId }: Props) {
                 c.dark ? " dark-swatch" : ""
               }`}
               style={{ background: c.css }}
-              title={c.label}
+              title={t(`color.${c.id}`)}
               onClick={() => {
                 colorDraft.current = c.id;
                 setNote({
@@ -323,8 +355,8 @@ export function NoteWindow({ noteId }: Props) {
           <button
             type="button"
             className="ghost no-drag icon-action"
-            title="New note"
-            aria-label="New note (same color)"
+            title={t("note.newNote")}
+            aria-label={t("note.newNoteSame")}
             onClick={() => void newSiblingNote()}
           >
             ＋
@@ -332,8 +364,8 @@ export function NoteWindow({ noteId }: Props) {
           <button
             type="button"
             className="ghost no-drag icon-action"
-            title="Open manager"
-            aria-label="Open manager"
+            title={t("note.openManager")}
+            aria-label={t("note.openManager")}
             onClick={() => void openManager()}
           >
             🏠
@@ -341,19 +373,19 @@ export function NoteWindow({ noteId }: Props) {
           <button
             type="button"
             className="ghost no-drag icon-action"
-            title="Lock vault"
-            aria-label="Lock vault"
+            title={t("note.lockVault")}
+            aria-label={t("note.lockVault")}
             onClick={() => void lockVault()}
           >
             🔒
           </button>
-          <span className="save-dot" title={saved ? "Saved" : "Saving…"}>
+          <span className="save-dot" title={saved ? t("note.saved") : t("note.saving")}>
             {saved ? "✓" : "…"}
           </span>
           <button
             type="button"
             className="ghost no-drag"
-            title="Copy selection or full body (auto-clears in 30s)"
+            title={t("note.copyTitle")}
             onClick={async () => {
               const el = bodyRef.current;
               const selected =
@@ -361,9 +393,9 @@ export function NoteWindow({ noteId }: Props) {
                   ? body.slice(el.selectionStart, el.selectionEnd)
                   : "";
               if (selected) {
-                await doCopy(selected, "Copied selection");
+                await doCopy(selected, t("note.copiedSelection"));
               } else {
-                await doCopy(body, "Copied body");
+                await doCopy(body, t("note.copiedBody"));
               }
             }}
           >
@@ -372,7 +404,7 @@ export function NoteWindow({ noteId }: Props) {
           <button
             type="button"
             className="ghost no-drag"
-            title={note.always_on_top ? "Unpin" : "Always on top"}
+            title={note.always_on_top ? t("note.unpin") : t("note.pin")}
             onClick={() => {
               const next = !note.always_on_top;
               alwaysOnTopDraft.current = next;
@@ -385,7 +417,7 @@ export function NoteWindow({ noteId }: Props) {
           <button
             type="button"
             className="ghost no-drag"
-            title="Close"
+            title={t("note.close")}
             onClick={async () => {
               if (saveTimer.current) {
                 window.clearTimeout(saveTimer.current);
@@ -408,7 +440,7 @@ export function NoteWindow({ noteId }: Props) {
         ref={titleRef}
         className="note-title-input no-drag"
         data-tauri-drag-region="false"
-        placeholder="Title"
+        placeholder={t("note.titlePlaceholder")}
         value={title}
         spellCheck={false}
         autoComplete="off"
@@ -427,7 +459,7 @@ export function NoteWindow({ noteId }: Props) {
         ref={bodyRef}
         className="note-body no-drag"
         data-tauri-drag-region="false"
-        placeholder="Secrets, API keys, passwords…"
+        placeholder={t("note.bodyPlaceholder")}
         value={body}
         spellCheck={false}
         autoComplete="off"
@@ -448,7 +480,7 @@ export function NoteWindow({ noteId }: Props) {
           const selected = body.slice(el.selectionStart, el.selectionEnd);
           if (!selected) return;
           e.preventDefault();
-          void doCopy(selected, "Copied");
+          void doCopy(selected, t("note.copied"));
         }}
       />
       {(copyHint || error) && (
