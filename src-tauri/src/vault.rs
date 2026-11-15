@@ -1,7 +1,8 @@
 //! On-disk vault format and session state.
 //!
-//! Layout under `%APPDATA%/SecretSticky/`:
+//! Layout under `%APPDATA%/SecretSticky/` (or `--home` / `SECRETSTICKY_HOME`):
 //! - `vault.json` — header + encrypted note blobs (no plaintext)
+//! - `settings.json` — UI language only (not secrets). Optional. Unknown keys are kept.
 //!
 //! # Invariant: updates must NEVER corrupt saved stickies
 //!
@@ -242,12 +243,66 @@ pub struct Vault {
     idle_lock_needs_ui: bool,
 }
 
+/// `--home <dir>` or `--home=<dir>` from process arguments.
+/// The first token is the program name and is ignored.
+/// An empty value is ignored. A following token that starts with `-` is not consumed.
+pub(crate) fn home_from_iter<'a, I>(args: I) -> Option<PathBuf>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let mut iter = args.into_iter().peekable();
+    let _argv0 = iter.next();
+    while let Some(arg) = iter.next() {
+        if let Some(rest) = arg.strip_prefix("--home=") {
+            if !rest.is_empty() {
+                return Some(PathBuf::from(rest));
+            }
+            continue;
+        }
+        if arg == "--home" {
+            if let Some(next) = iter.peek().copied() {
+                if !next.is_empty() && !next.starts_with('-') {
+                    iter.next();
+                    return Some(PathBuf::from(next));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// `--home` wins over `SECRETSTICKY_HOME`. Empty env values are ignored.
+pub(crate) fn home_override_from(args: &[String], env_home: Option<&str>) -> Option<PathBuf> {
+    if let Some(dir) = home_from_iter(args.iter().map(String::as_str)) {
+        return Some(dir);
+    }
+    env_home
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+fn configured_home() -> Option<PathBuf> {
+    let args: Vec<String> = std::env::args().collect();
+    let env_home = std::env::var("SECRETSTICKY_HOME").ok();
+    home_override_from(&args, env_home.as_deref())
+}
+
+fn resolve_data_dir() -> AppResult<PathBuf> {
+    if let Some(home) = configured_home() {
+        fs::create_dir_all(&home)?;
+        return Ok(home);
+    }
+    let dir = dirs::data_dir()
+        .ok_or_else(|| AppError::Message("cannot resolve app data dir".into()))?
+        .join("SecretSticky");
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
 impl Vault {
     pub fn open_default() -> AppResult<Self> {
-        let dir = dirs::data_dir()
-            .ok_or_else(|| AppError::Message("cannot resolve app data dir".into()))?
-            .join("SecretSticky");
-        fs::create_dir_all(&dir)?;
+        let dir = resolve_data_dir()?;
         let path = dir.join("vault.json");
         Self::open_path(path)
     }
@@ -298,6 +353,14 @@ impl Vault {
     #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Directory that holds `vault.json` and `settings.json`.
+    pub(crate) fn data_dir(&self) -> PathBuf {
+        self.path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     pub fn status(&self) -> VaultStatus {
@@ -1098,6 +1161,47 @@ impl VaultState {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn home_override_prefers_flag_over_env() {
+        let args = vec![
+            "secretsticky.exe".to_string(),
+            "--home".to_string(),
+            r"C:\from-flag".to_string(),
+        ];
+        assert_eq!(
+            home_override_from(&args, Some(r"C:\from-env")),
+            Some(PathBuf::from(r"C:\from-flag"))
+        );
+        let equals = vec!["app".to_string(), "--home=D:\\vault".to_string()];
+        assert_eq!(
+            home_override_from(&equals, Some(r"C:\from-env")),
+            Some(PathBuf::from(r"D:\vault"))
+        );
+    }
+
+    #[test]
+    fn home_ignores_empty_values_and_does_not_consume_flags() {
+        assert_eq!(home_from_iter(["app", "--home=", "--other"]), None);
+        assert_eq!(home_from_iter(["app", "--home", "--flag", "--x"]), None);
+        assert_eq!(
+            home_from_iter(["app", "--other", "--home", r"E:\notes"]),
+            Some(PathBuf::from(r"E:\notes"))
+        );
+        let args = vec!["app".to_string()];
+        assert_eq!(home_override_from(&args, Some("  ")), None);
+        assert_eq!(
+            home_override_from(&args, Some(r"E:\env-home")),
+            Some(PathBuf::from(r"E:\env-home"))
+        );
+    }
+
+    #[test]
+    fn data_dir_is_parent_of_vault_path() {
+        let dir = tempdir().unwrap();
+        let vault = Vault::open_path(dir.path().join("vault.json")).unwrap();
+        assert_eq!(vault.data_dir(), dir.path());
+    }
 
     fn test_vault() -> (tempfile::TempDir, Vault) {
         let dir = tempdir().unwrap();

@@ -419,11 +419,7 @@ pub fn notes_update(
         if color.is_some() {
             let _ = w.set_background_color(Some(color_to_rgba(&note.color)));
         }
-        let title = if note.title.trim().is_empty() {
-            "Sticky note".to_string()
-        } else {
-            note.title.clone()
-        };
+        let title = sticky_title(&app, &note.title);
         let _ = w.set_title(&title);
     }
     let _ = app.emit("notes-changed", ());
@@ -574,8 +570,52 @@ pub fn change_password(
     v.change_password(&current, &new_password)
 }
 
+fn ui_lang(app: &AppHandle) -> String {
+    app.try_state::<crate::i18n::I18nState>()
+        .and_then(|state| state.lang.lock().ok().map(|guard| guard.clone()))
+        .unwrap_or_else(|| "en".to_string())
+}
+
+/// Empty titles use the catalog. User-written titles are never translated.
+fn sticky_title(app: &AppHandle, title: &str) -> String {
+    if title.trim().is_empty() {
+        crate::i18n::t(&ui_lang(app), "note.windowTitle")
+    } else {
+        title.to_string()
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct BootPayload {
+    lang: String,
+    ci: bool,
+}
+
+#[tauri::command]
+pub fn ui_get_boot(window: tauri::WebviewWindow, app: AppHandle) -> AppResult<BootPayload> {
+    ensure_main_or_note(&window)?;
+    Ok(BootPayload {
+        lang: ui_lang(&app),
+        ci: crate::i18n::ci_mode(),
+    })
+}
+
+#[tauri::command]
+pub fn ui_set_lang(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    lang: String,
+) -> AppResult<String> {
+    ensure_manager_only(Some(&window))?;
+    crate::apply_language(&app, &lang).map_err(AppError::Message)
+}
+
 /// Internal show (tray / backend). Prefer the gated command from webviews.
 pub fn show_main(app: AppHandle) -> AppResult<()> {
+    // CI launches must not raise or focus a window (including a second instance).
+    if crate::i18n::ci_mode() {
+        return Ok(());
+    }
     if let Some(main) = app.get_webview_window("main") {
         if let Some(icon) = app.default_window_icon() {
             let _ = main.set_icon(icon.clone());
@@ -803,11 +843,7 @@ fn open_note_window(app: &AppHandle, note: &NoteDto) -> AppResult<()> {
     );
 
     let mut builder = WebviewWindowBuilder::new(app, &label, url)
-        .title(if note.title.trim().is_empty() {
-            "Sticky note".into()
-        } else {
-            note.title.clone()
-        })
+        .title(sticky_title(app, &note.title))
         .inner_size(width, height)
         .min_inner_size(NOTE_MIN_WIDTH, NOTE_MIN_HEIGHT)
         .position(x, y)
