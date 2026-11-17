@@ -137,7 +137,7 @@ pub fn open(st: &St, dto: NoteDto) {
             let center = Point::new(cx.size.width / 2.0, cx.size.height / 2.0);
             let c = if saved.get() { ink(&color.get()).with_alpha(0.35) } else { ink(&color.get()) };
             cx.list.fill_rounded(
-                remedy_ui::core::Rect::new(center.x - r, center.y - r, r * 2.0, r * 2.0),
+                remedy_ui::core::Rect::new(center.x - r, center.y - r, center.x + r, center.y + r),
                 remedy_ui::core::CornerRadii::all(r),
                 remedy_ui_paint::Brush::Solid(c),
             );
@@ -233,7 +233,7 @@ pub fn open(st: &St, dto: NoteDto) {
             // Six dots in a triangle against the corner.
             for (i, j) in [(1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (1, 3)] {
                 let (x, y) = (cx.size.width - 4.0 * i as f32 - 1.0, cx.size.height - 4.0 * j as f32 - 1.0);
-                cx.list.fill_rect(remedy_ui::core::Rect::new(x, y, 2.0, 2.0), remedy_ui_paint::Brush::Solid(c));
+                cx.list.fill_rect(remedy_ui::core::Rect::new(x, y, x + 2.0, y + 2.0), remedy_ui_paint::Brush::Solid(c));
             }
         })
         .width(16.0)
