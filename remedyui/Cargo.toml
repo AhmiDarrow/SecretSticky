@@ -39,6 +39,7 @@ hex = "=0.4.3"
 [dev-dependencies]
 tempfile = "=3.27.0"
 remedy-ui-bridge-headless = { path = "../../Projects/RemedyUI/crates/remedy-ui-bridge-headless" }
+remedy-ui-devtools = { path = "../../Projects/RemedyUI/crates/remedy-ui-devtools" }
 
 # Argon2 (64 MiB, 3 passes) is slow unoptimized; tests unlock vaults.
 [profile.dev.package.argon2]

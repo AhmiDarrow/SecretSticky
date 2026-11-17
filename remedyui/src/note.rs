@@ -238,6 +238,8 @@ pub fn open(st: &St, dto: NoteDto) {
         })
         .width(16.0)
         .height(16.0)
+        // Keyboard users resize through the system's window menu (Alt+Space, then Size).
+        .keyboard_alternative("The window menu's Size command")
         .on_pointer(move |e| {
             if e.phase == PointerPhase::Down && e.buttons.contains(Buttons::PRIMARY) {
                 sizer.begin_resize(ResizeEdge::BottomRight);

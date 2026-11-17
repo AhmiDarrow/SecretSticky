@@ -256,6 +256,7 @@ fn recovery_key(st: &St, ui: &Ui) -> El {
         }
     };
     let shown = w::label(ui, Zeroizing::new(key).as_str(), "strong")
+        .data_text()
         .style(StylePatch { mono: Some(true), ..StylePatch::default() })
         .semantics(remedy_ui_a11y::Semantics::new(remedy_ui_a11y::Role::Label).label("Recovery key"));
     w::card(ui).fill_width().child(
@@ -395,7 +396,7 @@ fn note_row(st: &St, ui: &Ui, p: &Preview) -> El {
         .fill_width()
         .padding(Insets::symmetric(unit * 2.0, unit * 3.0))
         .child(dot)
-        .child(w::text(ui, title.clone()).grow(1.0).nowrap())
+        .child(w::text(ui, title.clone()).data_text().grow(1.0).nowrap())
         .child(delete)
         .on_click(move || state::open_note(&st1, &id1))
         .semantics(remedy_ui_a11y::Semantics::new(remedy_ui_a11y::Role::Button).label(format!("Open {title}")))
