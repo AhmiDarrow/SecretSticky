@@ -84,6 +84,23 @@ impl Driver {
         }
     }
 
+    /// The engine's accessibility check finds nothing in the window.
+    fn assert_accessible(&self, ui: &remedy_ui::Ui) {
+        let found: Vec<String> = remedy_ui_devtools::audit(ui)
+            .iter()
+            .map(|p| format!("{} [{}]", p.message(), ui.element(p.element).info().map(|i| remedy_ui_devtools::describe(&i)).unwrap_or_default()))
+            .collect();
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    fn manager_ui(&self) -> remedy_ui::Ui {
+        self.st.manager.borrow().as_ref().and_then(|w| w.ui()).unwrap_or_else(|| panic!("the manager is open"))
+    }
+
+    fn note_ui(&self) -> remedy_ui::Ui {
+        self.st.open.borrow().values().next().and_then(|n| n.window.ui()).unwrap_or_else(|| panic!("a note is open"))
+    }
+
     /// Every control assistive technology can press or focus has a name.
     fn assert_labelled(&self, window: WindowId) {
         let tree = self.trees.get(&window).expect("a tree");
@@ -143,6 +160,7 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     let manager = d.windows()[0];
     assert_eq!(d.screen(), Screen::Setup);
     d.assert_labelled(manager);
+    d.assert_accessible(&d.manager_ui());
     assert!(d.host.window(manager).is_some_and(|w| w.options().capture_protected), "manager hidden from capture");
     assert!(d.host.tray().is_some_and(|t| t.tooltip == "SecretSticky"), "tray icon shown");
 
@@ -172,6 +190,8 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     d.frames(2);
     d.assert_labelled(note);
     d.assert_labelled(manager);
+    d.assert_accessible(&d.note_ui());
+    d.assert_accessible(&d.manager_ui());
     d.type_into(note, "Note", "the launch code is 0000");
     d.host.advance(Duration::from_millis(500));
     d.frames(2);
