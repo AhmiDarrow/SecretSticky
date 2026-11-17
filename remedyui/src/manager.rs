@@ -366,7 +366,7 @@ fn note_row(st: &St, ui: &Ui, p: &Preview) -> El {
         let r = 6.0;
         let c = Point::new(cx.size.width / 2.0, cx.size.height / 2.0);
         cx.list.fill_rounded(
-            remedy_ui::core::Rect::new(c.x - r, c.y - r, r * 2.0, r * 2.0),
+            remedy_ui::core::Rect::new(c.x - r, c.y - r, c.x + r, c.y + r),
             remedy_ui::core::CornerRadii::all(r),
             remedy_ui_paint::Brush::Solid(color),
         );
