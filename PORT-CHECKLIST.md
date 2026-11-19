@@ -73,4 +73,4 @@ or the screenshots in `port-evidence/` (`before/` is the shipped UI, `after/` is
 ## Targets
 
 - [x] Windows: `cargo build --release`, and the built app was run against a temporary vault.
-- [ ] Linux: see `SecretSticky-REPORT.md` in the session notes for the status.
+- [x] Linux (WSL Ubuntu 24.04): `cargo test --release` passes (73 tests, including the shipped-vault round trip), run headless.
