@@ -30,6 +30,9 @@ const ON_ACCENT: &str = "#1a1b1e";
 /// The SecretSticky theme.
 pub fn theme() -> Theme {
     let mut t = remedy_ui_themes::theme(&BRAND);
+    // The shipped typeface first (`font-family: "Inter", system-ui, …` in `src/App.css`); the
+    // files come with `fonts::with_inter`.
+    t.font_families.insert(0, crate::fonts::FAMILY.to_owned());
     if let Ok(c) = Color::from_hex(ON_ACCENT) {
         t.colors.on_accent = c;
     }

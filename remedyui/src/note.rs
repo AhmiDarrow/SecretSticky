@@ -8,7 +8,7 @@ use std::time::Duration;
 use remedy_ui::WindowSpec;
 use remedy_ui::core::{Color, Insets, Point, Size};
 use remedy_ui::host::ResizeEdge;
-use remedy_ui::input::{Buttons, Key, PointerPhase};
+use remedy_ui::input::{Buttons, PointerPhase};
 use remedy_ui::reactive::Signal;
 use remedy_ui::style::{States, StylePatch};
 use remedy_ui::view::Align;
@@ -61,12 +61,6 @@ pub fn placement(dto: &NoteDto) -> (f64, f64, f64, f64) {
     (x, y, size(dto.width, NOTE_MIN_WIDTH, NOTE_MIN_WIDTH), size(dto.height, NOTE_MIN_HEIGHT, NOTE_DEFAULT_HEIGHT))
 }
 
-/// Whether `e` is the platform's copy (`c`) or cut (`x`) shortcut.
-fn is_clip_key(e: &remedy_ui::input::KeyEvent, letter: &str) -> bool {
-    let primary = if cfg!(target_os = "macos") { e.modifiers.meta } else { e.modifiers.ctrl };
-    e.pressed && primary && !e.modifiers.alt && matches!(&e.key, Key::Character(c) if c.eq_ignore_ascii_case(letter))
-}
-
 /// Opens the window for `dto`.
 pub fn open(st: &St, dto: NoteDto) {
     let id = dto.id.clone();
@@ -78,6 +72,11 @@ pub fn open(st: &St, dto: NoteDto) {
         .frameless()
         .always_on_top(dto.always_on_top)
         .capture_protected(true);
+    // The shipped app's icon in the taskbar and window switchers, as every Tauri window had.
+    let spec = match crate::brand::window_icon() {
+        Some(icon) => spec.icon(icon),
+        None => spec,
+    };
 
     let pending: Rc<RefCell<Pending>> = Rc::default();
     let saved = Signal::new(true);
@@ -150,43 +149,36 @@ pub fn open(st: &St, dto: NoteDto) {
             })
         };
 
-        let title = w::text_input(ui, "Title").placeholder("Title");
+        // Copying out of a note goes through the secret clipboard: kept out of clipboard
+        // history and cleared after 30 seconds, as the shipped app's copy did. Ctrl+C and
+        // Ctrl+X in the title and the text are the engine's secret copies; the Copy button
+        // copies the selection or the whole text the same way.
+        let copied: Rc<dyn Fn(&str)> = {
+            let say = say.clone();
+            Rc::new(move |what: &str| {
+                say(false, format!("{what} · clears in {}s", COPY_KEEP.as_secs()), Duration::from_millis(2500));
+            })
+        };
+        let field = |f: remedy_ui::TextField| {
+            let copied = copied.clone();
+            f.copy_as_secret(COPY_KEEP).on_copy(move || copied("Copied"))
+        };
+        let title = field(w::text_input(ui, "Title").placeholder("Title"));
         title.set_value(&title_text);
-        let body = w::text_area(ui, "Note").placeholder("Secrets, API keys, passwords…");
+        let body = field(w::text_area(ui, "Note").placeholder("Secrets, API keys, passwords…"));
         body.set_value(&body_text);
 
-        // Copying from a note goes through the secret clipboard: kept out of clipboard
-        // history and cleared after 30 seconds, as the shipped app's copy did.
         let copy_out: Rc<dyn Fn(String, &str)> = {
-            let (app, say) = (st.app.clone(), say.clone());
+            let (app, say, copied) = (st.app.clone(), say.clone(), copied.clone());
             Rc::new(move |text: String, what: &str| {
                 if text.is_empty() {
                     say(false, "Nothing to copy".to_owned(), Duration::from_millis(1500));
                     return;
                 }
                 app.copy_secret(text, COPY_KEEP);
-                say(false, format!("{what} · clears in {}s", COPY_KEEP.as_secs()), Duration::from_millis(2500));
+                copied(what);
             })
         };
-        for f in [&title, &body] {
-            let (f2, copy_out) = (f.clone(), copy_out.clone());
-            f.intercept_keys(move |e| {
-                let (copy, cut) = (is_clip_key(e, "c"), is_clip_key(e, "x"));
-                if !copy && !cut {
-                    return false;
-                }
-                let range = f2.selection();
-                if range.is_empty() {
-                    return true;
-                }
-                let text = f2.value().get(range.clone()).unwrap_or_default().to_owned();
-                copy_out(text, "Copied");
-                if cut {
-                    f2.replace_range(range, "");
-                }
-                true
-            });
-        }
 
         // Title bar: the colors, then the actions. Drag anywhere that is not a control.
         let swatches = COLORS.iter().fold(w::wrap(ui).gap(0.0), |row, (c, name)| {
@@ -242,7 +234,7 @@ pub fn open(st: &St, dto: NoteDto) {
             .gap(unit * 0.5)
             .align(Align::Center)
             .child(tool(Icon::Plus, "New note (same color)", Box::new(move || state::new_note(&s1, color.get()))))
-            .child(tool(Icon::Note, "Open manager", Box::new(move || state::show_manager(&s2))))
+            .child(tool(Icon::Home, "Open manager", Box::new(move || state::show_manager(&s2))))
             .child(tool(Icon::Lock, "Lock vault", Box::new(move || state::lock_all(&s3))))
             .child(saving)
             .child(copy)
@@ -289,16 +281,17 @@ pub fn open(st: &St, dto: NoteDto) {
         let body_el = body.el().variant(field_variant).style(field_style).fill_width().grow(1.0);
 
         let u = ui.clone();
-        let message = crate::state::when(ui, move || status.with(Option::is_some), move || {
-            let (error, text) = status.get_untracked().ok().flatten().unwrap_or_default();
+        let message = remedy_ui::show(ui, move || status.with(Option::is_some), move || {
+            // Follows the status while shown: a second message replaces the first.
+            let now = move || status.get().unwrap_or_default();
             let small = u.theme().type_scale.small;
-            w::text(&u, text.clone())
+            w::text(&u, move || now().1)
                 .style(move || {
-                    let fg = if error { Color::from_hex("#b91c1c").unwrap_or(Color::BLACK) } else { ink(&color.get()) };
+                    let fg = if now().0 { Color::from_hex("#b91c1c").unwrap_or(Color::BLACK) } else { ink(&color.get()) };
                     StylePatch::new().foreground(fg).text_size(small)
                 })
-                .semantics(Semantics::new(Role::Status).label(text))
-        });
+                .semantics(move || Semantics::new(Role::Status).label(now().1))
+        }).el();
 
         // A corner grip resizes the frameless window.
         let sizer = win.clone();

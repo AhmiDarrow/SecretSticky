@@ -105,18 +105,6 @@ pub fn fill(c: &NoteColor) -> remedy_ui::core::Color {
     remedy_ui::core::Color::from_hex(c.as_css()).unwrap_or(remedy_ui::core::Color::WHITE)
 }
 
-/// Content built while `when` holds (a [`remedy_ui::show`]) that takes no room, and no gap
-/// in its row or column, while it does not.
-pub fn when(ui: &remedy_ui::Ui, when: impl Fn() -> bool + Clone + 'static, build: impl Fn() -> remedy_ui::El + 'static) -> remedy_ui::El {
-    let w2 = when.clone();
-    // No minimum height: a scroll inside can be shorter than its content.
-    let el = remedy_ui::show(ui, move || when(), build).el().layout(|l| l.min_height = remedy_ui::layout::Length::Px(0.0));
-    let e2 = el.clone();
-    el.bind(move || {
-        let _ = e2.clone().hidden(!w2());
-    })
-}
-
 /// Padding in CSS order: top, end, bottom, start.
 pub fn pad(top: f32, end: f32, bottom: f32, start: f32) -> remedy_ui::core::Insets {
     remedy_ui::core::Insets { top, end, bottom, start }
