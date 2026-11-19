@@ -77,6 +77,10 @@ pub fn open(st: &St) {
         .hide_on_close()
         .persist_geometry("manager")
         .capture_protected(true);
+    let spec = match crate::brand::window_icon() {
+        Some(icon) => spec.icon(icon),
+        None => spec,
+    };
     let s = st.clone();
     let win = st.app.open(spec, move |ui, win| build(&s, ui, win));
     *st.manager.borrow_mut() = Some(win);
@@ -89,29 +93,32 @@ fn build(st: &St, ui: &Ui, win: &Window) {
     let page = w::column(ui).grow(1.0).fill_width().layout(|l| l.min_height = remedy_ui::layout::Length::Px(0.0));
     let s = |want: Screen| move || screen.get() == want;
     let (st1, ui1) = (st.clone(), ui.clone());
-    let setup = crate::state::when(ui, s(Screen::Setup), move || gate(&st1, &ui1, true, false, use_recovery));
+    let setup = remedy_ui::show(ui, s(Screen::Setup), move || gate(&st1, &ui1, true, false, use_recovery)).el();
     let (st2, ui2) = (st.clone(), ui.clone());
-    let unlock = crate::state::when(ui, move || screen.get() == Screen::Unlock && !use_recovery.get(), move || {
+    let unlock = remedy_ui::show(ui, move || screen.get() == Screen::Unlock && !use_recovery.get(), move || {
         gate(&st2, &ui2, false, false, use_recovery)
-    });
+    }).el();
     let (st3, ui3) = (st.clone(), ui.clone());
-    let recovery = crate::state::when(ui, move || screen.get() == Screen::Unlock && use_recovery.get(), move || {
+    let recovery = remedy_ui::show(ui, move || screen.get() == Screen::Unlock && use_recovery.get(), move || {
         gate(&st3, &ui3, false, true, use_recovery)
-    });
+    }).el();
     let (st4, ui4) = (st.clone(), ui.clone());
-    let key = crate::state::when(ui, s(Screen::Recovery), move || centered(&ui4, recovery_key(&st4, &ui4)));
+    let key = remedy_ui::show(ui, s(Screen::Recovery), move || centered(&ui4, recovery_key(&st4, &ui4))).el();
     let (st5, ui5, upd) = (st.clone(), ui.clone(), updater.clone());
-    let unlocked = crate::state::when(ui, s(Screen::Unlocked), move || unlocked(&st5, &ui5, &upd));
+    let unlocked = remedy_ui::show(ui, s(Screen::Unlocked), move || unlocked(&st5, &ui5, &upd)).el();
     let (st6, ui6) = (st.clone(), ui.clone());
-    let broken = crate::state::when(ui, s(Screen::Broken), move || centered(&ui6, broken(&st6, &ui6)));
+    let broken = remedy_ui::show(ui, s(Screen::Broken), move || centered(&ui6, broken(&st6, &ui6))).el();
     let _ = win;
+    // The screens take turns in the page: the one shown fills it (the others take no room),
+    // and scrolls inside rather than growing past a small window.
+    let screen = |e: El| e.grow(1.0).layout(|l| l.min_height = remedy_ui::layout::Length::Px(0.0));
     ui.root().child(
-        page.child(setup.grow(1.0))
-            .child(unlock.grow(1.0))
-            .child(recovery.grow(1.0))
-            .child(key.grow(1.0))
-            .child(unlocked.grow(1.0))
-            .child(broken.grow(1.0)),
+        page.child(screen(setup))
+            .child(screen(unlock))
+            .child(screen(recovery))
+            .child(screen(key))
+            .child(screen(unlocked))
+            .child(screen(broken)),
     );
 }
 
@@ -140,11 +147,11 @@ fn mark(ui: &Ui, size: f32) -> El {
 fn error_line(st: &St, ui: &Ui) -> El {
     let e = st.error;
     let u = ui.clone();
-    crate::state::when(ui, move || e.with(Option::is_some), move || {
+    remedy_ui::show(ui, move || e.with(Option::is_some), move || {
         w::text(&u, move || e.get().unwrap_or_default()).variant("error").semantics(move || {
             Semantics::new(Role::Status).label(e.get().unwrap_or_default())
         })
-    })
+    }).el()
     .fill_width()
 }
 
@@ -410,11 +417,11 @@ fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
 
     // Panels.
     let (st_a, ui_a, up_a) = (st.clone(), ui.clone(), updater.clone());
-    let about = crate::state::when(ui, move || panel.get() == Panel::About, move || about(&st_a, &ui_a, &up_a, panel));
+    let about = remedy_ui::show(ui, move || panel.get() == Panel::About, move || about(&st_a, &ui_a, &up_a, panel)).el();
     let (st_p, ui_p) = (st.clone(), ui.clone());
-    let password = crate::state::when(ui, move || panel.get() == Panel::Password, move || password(&st_p, &ui_p, panel));
+    let password = remedy_ui::show(ui, move || panel.get() == Panel::Password, move || password(&st_p, &ui_p, panel)).el();
     let (st_l, ui_l) = (st.clone(), ui.clone());
-    let auto_lock = crate::state::when(ui, move || panel.get() == Panel::AutoLock, move || auto_lock(&st_l, &ui_l, panel));
+    let auto_lock = remedy_ui::show(ui, move || panel.get() == Panel::AutoLock, move || auto_lock(&st_l, &ui_l, panel)).el();
 
     // New note: one swatch per color.
     let swatches = COLORS.iter().fold(w::wrap(ui).gap(unit * 1.5), |row, (c, name)| {
@@ -439,11 +446,11 @@ fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
         move |p| note_row(&st2, &ui2, p, panel),
     );
     let ui3 = ui.clone();
-    let empty = crate::state::when(ui, move || notes.with(Vec::is_empty), move || {
+    let empty = remedy_ui::show(ui, move || notes.with(Vec::is_empty), move || {
         w::text(&ui3, "No notes yet — pick a color to create one.")
             .variant("muted")
             .padding(Insets::symmetric(unit * 6.0, unit * 3.0))
-    });
+    }).el();
 
     let middle = w::column(ui)
         .gap(unit * 3.0)
@@ -699,10 +706,10 @@ fn password(st: &St, ui: &Ui, panel: Signal<Panel>) -> El {
         w::field(ui, label, f.clone().on_submit(move || s()).el().fill_width().disabled(move || busy.get()))
     };
     let u = ui.clone();
-    let message = crate::state::when(ui, move || msg.with(Option::is_some), move || {
+    let message = remedy_ui::show(ui, move || msg.with(Option::is_some), move || {
         let m = msg.get_untracked().ok().flatten().unwrap_or_default();
         w::text(&u, m.1.clone()).variant(if m.0 { "ok" } else { "error" }).semantics(Semantics::new(Role::Status).label(m.1))
-    });
+    }).el();
     let actions = w::row(ui)
         .gap(unit * 2.0)
         .child(

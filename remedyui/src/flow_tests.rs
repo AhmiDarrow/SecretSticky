@@ -41,7 +41,7 @@ impl Driver {
     fn start(start: impl FnOnce(&App) -> St + 'static) -> Self {
         let slot: Rc<RefCell<Option<St>>> = Rc::default();
         let s2 = slot.clone();
-        let config = AppConfig::new("SecretSticky test").cpu_only().theme(crate::theme::theme(), crate::theme::sheet);
+        let config = crate::fonts::with_inter(AppConfig::new("SecretSticky test").cpu_only().theme(crate::theme::theme(), crate::theme::sheet));
         let mut runner = Runner::with_geometry(config, GeometryStore::in_memory(), move |app: &App| {
             *s2.borrow_mut() = Some(start(app));
         });
@@ -289,6 +289,9 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     d.key(note, "a", true);
     d.key(note, "c", true);
     assert_eq!(d.host.clipboard(), Some(("the launch code is 0000", true)), "Ctrl+C is a secret copy");
+    assert!(d.has(note, "Copied · clears in 30s"), "and says so");
+    assert!(d.host.window(note).is_some_and(|w| w.options().icon.is_some()), "the note shows the app's icon");
+    assert!(d.host.window(manager).is_some_and(|w| w.options().icon.is_some()), "so does the manager");
 
     // Color and pin are saved with the note.
     d.click(note, "Dark green");
