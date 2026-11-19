@@ -22,6 +22,7 @@ remedy-ui-themes = { path = "../../Projects/RemedyUI/crates/remedy-ui-themes" }
 remedy-ui-services-update = { path = "../../Projects/RemedyUI/crates/remedy-ui-services-update" }
 remedy-ui-paint = { path = "../../Projects/RemedyUI/crates/remedy-ui-paint" }
 remedy-ui-a11y = { path = "../../Projects/RemedyUI/crates/remedy-ui-a11y" }
+remedy-ui-media-image = { path = "../../Projects/RemedyUI/crates/remedy-ui-media-image" }
 # The vault, shared with the Tauri app (same versions as its lockfile).
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"

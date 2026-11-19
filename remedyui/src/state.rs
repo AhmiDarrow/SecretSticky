@@ -36,6 +36,30 @@ pub struct Preview {
     pub color: NoteColor,
 }
 
+impl Preview {
+    /// What the list shows for the title: the title, or "Untitled note".
+    pub fn shown_title(&self) -> String {
+        shown_title(&self.title)
+    }
+}
+
+/// A title as the manager shows it ("Untitled note" when blank).
+pub fn shown_title(title: &str) -> String {
+    let t = title.trim();
+    if t.is_empty() { "Untitled note".to_owned() } else { t.to_owned() }
+}
+
+/// A title as a note window's title bar shows it ("Sticky note" when blank).
+pub fn window_title(title: &str) -> String {
+    let t = title.trim();
+    if t.is_empty() { "Sticky note".to_owned() } else { t.to_owned() }
+}
+
+/// A color's name, as the pickers say it.
+pub fn color_name(c: &NoteColor) -> &'static str {
+    COLORS.iter().find(|(k, _)| k == c).map_or("Yellow", |(_, n)| n)
+}
+
 /// An open note window.
 pub struct OpenNote {
     pub window: Window,
@@ -79,6 +103,28 @@ pub const COLORS: [(NoteColor, &str); 8] = [
 /// A note color as an engine color.
 pub fn fill(c: &NoteColor) -> remedy_ui::core::Color {
     remedy_ui::core::Color::from_hex(c.as_css()).unwrap_or(remedy_ui::core::Color::WHITE)
+}
+
+/// Content built while `when` holds (a [`remedy_ui::show`]) that takes no room, and no gap
+/// in its row or column, while it does not.
+pub fn when(ui: &remedy_ui::Ui, when: impl Fn() -> bool + Clone + 'static, build: impl Fn() -> remedy_ui::El + 'static) -> remedy_ui::El {
+    let w2 = when.clone();
+    // No minimum height: a scroll inside can be shorter than its content.
+    let el = remedy_ui::show(ui, move || when(), build).el().layout(|l| l.min_height = remedy_ui::layout::Length::Px(0.0));
+    let e2 = el.clone();
+    el.bind(move || {
+        let _ = e2.clone().hidden(!w2());
+    })
+}
+
+/// Padding in CSS order: top, end, bottom, start.
+pub fn pad(top: f32, end: f32, bottom: f32, start: f32) -> remedy_ui::core::Insets {
+    remedy_ui::core::Insets { top, end, bottom, start }
+}
+
+/// Whether a note color is dark (light text on it).
+pub fn is_dark(c: &NoteColor) -> bool {
+    matches!(c, NoteColor::Black | NoteColor::DarkGreen)
 }
 
 /// The text color for a note color.
@@ -234,9 +280,28 @@ pub fn lock_all(st: &St) {
         n.window.close();
     }
     st.recovery_key.borrow_mut().take();
+    // A secret copied from a note or the recovery key does not outlive the lock.
+    st.app.clear_secret();
     st.locking.set(false);
     refresh(st);
     show_manager(st);
+}
+
+/// Saves open notes, clears a copied secret and quits (the tray stays until then).
+pub fn quit(st: &St) {
+    let flushes: Vec<_> = st.open.borrow().values().map(|n| n.flush.clone()).collect();
+    for f in flushes {
+        f();
+    }
+    st.app.clear_secret();
+    st.app.quit();
+}
+
+/// Hides the manager to the tray.
+pub fn hide_manager(st: &St) {
+    if let Some(w) = st.manager.borrow().as_ref() {
+        w.set_visible(false);
+    }
 }
 
 /// Shows and focuses the manager, opening it if it was closed.
@@ -254,14 +319,18 @@ pub fn show_manager(st: &St) {
 
 /// Opens a note's window, or brings it forward when it is open.
 pub fn open_note(st: &St, id: &str) {
-    if let Some(n) = st.open.borrow().get(id) {
-        n.window.set_visible(true);
-        n.window.focus();
+    let open = st.open.borrow().get(id).map(|n| n.window.clone());
+    if let Some(w) = open {
+        w.set_visible(true);
+        w.set_minimized(false);
+        w.focus();
+    } else if let Some(dto) = checked(st, st.with(|v| v.get_note(id))) {
+        crate::note::open(st, dto);
+    } else {
         return;
     }
-    if let Some(dto) = checked(st, st.with(|v| v.get_note(id))) {
-        crate::note::open(st, dto);
-    }
+    // A sticky takes over from the manager, which waits in the tray (as the Tauri app did).
+    hide_manager(st);
 }
 
 /// Opens every note.
@@ -277,6 +346,7 @@ pub fn new_note(st: &St, color: NoteColor) {
     if let Some(dto) = checked(st, st.with(|v| v.create_note(Some(color)))) {
         reload_notes(st);
         crate::note::open(st, dto);
+        hide_manager(st);
     }
 }
 
