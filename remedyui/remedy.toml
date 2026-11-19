@@ -1,0 +1,7 @@
+[app]
+name = "SecretSticky"
+id = "com.ahmi.secretsticky"
+publisher = "Ahmi Darrow"
+description = "Encrypted sticky notes"
+# The shipped app's icon (512 px).
+icon = "../src-tauri/icons/icon.png"

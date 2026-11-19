@@ -16,9 +16,11 @@ mod error;
 #[allow(dead_code)]
 mod vault;
 
+mod brand;
 mod manager;
 mod note;
 mod state;
+mod theme;
 mod tray;
 mod update;
 
@@ -26,13 +28,9 @@ mod update;
 mod flow_tests;
 
 fn main() {
-    let palette = remedy_ui_themes::palette("forest").or_else(|| remedy_ui_themes::PALETTES.first());
     // Another vault is another app: its own single-instance lock and window geometry.
     let name = if state::vault_override().is_some() { "SecretSticky (other vault)" } else { "SecretSticky" };
-    let mut config = remedy_ui::AppConfig::new(name).single_instance();
-    if let Some(p) = palette {
-        config = config.theme(remedy_ui_themes::theme(p), remedy_ui_themes::sheet);
-    }
+    let config = remedy_ui::AppConfig::new(name).single_instance().theme(theme::theme(), theme::sheet);
     if let Err(e) = remedy_ui::run(config, |app| {
         state::start(app);
     }) {

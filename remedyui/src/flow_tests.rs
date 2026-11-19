@@ -1,5 +1,6 @@
 //! The whole app on the headless host, driven the way a screen reader would: by the
-//! accessibility tree's labels and actions. Uses a vault in a temporary directory.
+//! accessibility tree's labels and actions. Every test uses a vault in a temporary directory;
+//! none opens the person's own vault.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,6 +15,9 @@ use remedy_ui_bridge_headless::HeadlessHost;
 
 use crate::state::{Screen, St};
 
+const PW: &str = "correct horse battery staple";
+const COPY: &str = "Copy selection or full body (auto-clears in 30s)";
+
 struct Driver {
     host: HeadlessHost,
     runner: Runner,
@@ -23,6 +27,32 @@ struct Driver {
 }
 
 impl Driver {
+    /// Starts the app on `vault` and reads its first frames.
+    fn new(vault: std::path::PathBuf) -> Self {
+        Self::start(move |app| crate::state::start_at(app, Some(vault)))
+    }
+
+    /// Starts the app as `main` does: on `SECRETSTICKY_VAULT` (tests always set it).
+    fn from_env() -> Self {
+        assert!(crate::state::vault_override().is_some(), "tests never open the person's own vault");
+        Self::start(|app| crate::state::start_at(app, crate::state::vault_override()))
+    }
+
+    fn start(start: impl FnOnce(&App) -> St + 'static) -> Self {
+        let slot: Rc<RefCell<Option<St>>> = Rc::default();
+        let s2 = slot.clone();
+        let config = AppConfig::new("SecretSticky test").cpu_only().theme(crate::theme::theme(), crate::theme::sheet);
+        let mut runner = Runner::with_geometry(config, GeometryStore::in_memory(), move |app: &App| {
+            *s2.borrow_mut() = Some(start(app));
+        });
+        let mut host = HeadlessHost::new();
+        host.run_frames(&mut runner, 1);
+        let st = slot.borrow().clone().expect("the app started");
+        let mut d = Driver { host, runner, st, trees: HashMap::new(), roots: HashMap::new() };
+        d.frames(2);
+        d
+    }
+
     fn frames(&mut self, n: usize) {
         self.host.run_frames(&mut self.runner, n);
         for id in self.host.window_ids() {
@@ -130,20 +160,54 @@ impl Driver {
         self.act(window, label, Action::Click);
     }
 
+    /// Presses `letter`, with Ctrl when `ctrl`, in `window`.
+    fn key(&mut self, window: WindowId, letter: &str, ctrl: bool) {
+        let e = KeyEvent::press(Key::Character(letter.into()))
+            .with_physical(format!("Key{}", letter.to_uppercase()))
+            .with_modifiers(Modifiers { ctrl, ..Modifiers::NONE })
+            .with_text(if ctrl { None } else { Some(letter.into()) });
+        self.host.send(HostEvent::Key(window, e));
+        self.frames(2);
+    }
+
     /// Types into a field by focusing it and pasting (what a password manager does).
     fn type_into(&mut self, window: WindowId, label: &str, text: &str) {
         self.act(window, label, Action::Focus);
         let _ = self.host.set_clipboard_text(text, true);
-        let ctrl_v = KeyEvent {
-            key: Key::Character("v".into()),
-            physical: "KeyV".into(),
-            modifiers: Modifiers { ctrl: true, ..Modifiers::NONE },
-            pressed: true,
-            repeat: false,
-            composing: false,
-            text: None,
-        };
-        self.host.send(HostEvent::Key(window, ctrl_v));
+        self.key(window, "v", true);
+    }
+
+    /// Replaces a field's whole text (select all, then paste).
+    fn replace_into(&mut self, window: WindowId, label: &str, text: &str) {
+        self.act(window, label, Action::Focus);
+        self.key(window, "a", true);
+        let _ = self.host.set_clipboard_text(text, true);
+        self.key(window, "v", true);
+    }
+
+    /// What a field holds, as assistive technology reads it.
+    fn value(&self, window: WindowId, label: &str) -> Option<String> {
+        let tree = self.trees.get(&window)?;
+        tree.values()
+            .find(|n| n.label() == Some(label) && n.supports_action(Action::Focus))
+            .and_then(|n| n.value().map(str::to_owned))
+    }
+
+    /// The open note window titled `title`.
+    fn note_window(&self, title: &str) -> WindowId {
+        self.windows()
+            .into_iter()
+            .find(|w| self.host.window(*w).is_some_and(|h| h.options().title == title && !h.options().decorated))
+            .unwrap_or_else(|| panic!("a note window titled {title}"))
+    }
+
+    fn manager_visible(&self) -> bool {
+        self.st.manager.borrow().as_ref().is_some_and(remedy_ui::Window::is_visible)
+    }
+
+    /// Brings the manager back (notes hide it), as the tray icon does.
+    fn show_manager(&mut self) {
+        crate::state::show_manager(&self.st);
         self.frames(2);
     }
 
@@ -162,36 +226,47 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     d.assert_labelled(manager);
     d.assert_accessible(&d.manager_ui());
     assert!(d.host.window(manager).is_some_and(|w| w.options().capture_protected), "manager hidden from capture");
-    assert!(d.host.tray().is_some_and(|t| t.tooltip == "SecretSticky"), "tray icon shown");
+    assert!(d.host.tray().is_some_and(|t| t.tooltip == crate::tray::TOOLTIP), "tray icon shown");
+    assert_eq!(d.host.tray().map(|t| t.menu.clone()), Some(crate::tray::menu()), "the shipped tray menu");
 
     // Setup refuses short and mismatched passwords.
     d.type_into(manager, "Master password", "short");
     d.type_into(manager, "Confirm password", "short");
     d.click(manager, "Create vault");
     assert_eq!(d.st.error.get_untracked().ok().flatten().as_deref(), Some("Use at least 12 characters"));
-    let pw = "correct horse battery staple";
-    d.type_into(manager, "Master password", pw);
-    d.type_into(manager, "Confirm password", pw);
+    d.type_into(manager, "Master password", PW);
+    d.type_into(manager, "Confirm password", "something else entirely");
+    d.click(manager, "Create vault");
+    assert_eq!(d.st.error.get_untracked().ok().flatten().as_deref(), Some("Passwords do not match"));
+    d.type_into(manager, "Master password", PW);
+    d.type_into(manager, "Confirm password", PW);
     d.click(manager, "Create vault");
     d.until("the recovery key", |d| d.screen() == Screen::Recovery);
     d.frames(2);
     let key = d.st.recovery_key.borrow().as_ref().map(|k| k.to_string()).expect("a recovery key");
+    assert!(d.has(manager, "Save your recovery key"));
     d.click(manager, "Copy key (2 min) — continue");
     assert_eq!(d.host.clipboard(), Some((key.as_str(), true)), "copied as sensitive");
     assert_eq!(d.screen(), Screen::Unlocked);
     assert!(d.st.recovery_key.borrow().is_none(), "the key is forgotten");
+    d.host.advance(Duration::from_secs(121));
+    d.frames(1);
+    assert!(d.host.clipboard().is_none_or(|(t, _)| t.is_empty()), "the recovery key leaves the clipboard after 2 minutes");
 
-    // A new note opens frameless and protected; typing saves after a pause.
+    // A new note opens frameless and protected; the manager steps back to the tray.
     d.frames(2);
+    assert!(d.has(manager, "No notes yet — pick a color to create one."));
     d.click(manager, "New yellow note");
     let note = *d.windows().iter().find(|w| **w != manager).expect("a note window");
     let opts = d.host.window(note).map(|w| w.options().clone()).expect("note options");
     assert!(!opts.decorated && opts.capture_protected, "frameless and capture protected");
+    assert!(!opts.always_on_top, "new notes are not pinned");
+    assert_eq!(opts.title, "Sticky note");
+    assert!(!d.manager_visible(), "a sticky hides the manager");
     d.frames(2);
     d.assert_labelled(note);
-    d.assert_labelled(manager);
     d.assert_accessible(&d.note_ui());
-    d.assert_accessible(&d.manager_ui());
+    d.type_into(note, "Title", "Launch");
     d.type_into(note, "Note", "the launch code is 0000");
     d.host.advance(Duration::from_millis(500));
     d.frames(2);
@@ -199,31 +274,51 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     assert!(!saved.contains("launch code"), "nothing plain on disk");
     let notes = d.st.with(|v| v.list_notes()).expect("notes");
     assert_eq!(notes.len(), 1);
-    assert_eq!(notes[0].body, "the launch code is 0000");
+    assert_eq!((notes[0].title.as_str(), notes[0].body.as_str()), ("Launch", "the launch code is 0000"));
+    assert_eq!(d.host.window(note).map(|w| w.options().title.clone()).as_deref(), Some("Launch"), "the title bar follows");
 
-    // Copy from the note clears itself.
-    d.click(note, "Copy note (clears in 30 s)");
+    // Copy from the note goes to the secret clipboard and clears itself.
+    d.click(note, COPY);
     assert_eq!(d.host.clipboard(), Some(("the launch code is 0000", true)));
+    assert!(d.has(note, "Copied body · clears in 30s"));
     d.host.advance(Duration::from_secs(31));
     d.frames(1);
-    assert_eq!(d.host.clipboard(), None, "cleared after 30 s");
+    assert!(d.host.clipboard().is_none_or(|(t, _)| t.is_empty()), "cleared after 30 s");
+    // Ctrl+C in the text copies the selection the same way.
+    d.act(note, "Note", Action::Focus);
+    d.key(note, "a", true);
+    d.key(note, "c", true);
+    assert_eq!(d.host.clipboard(), Some(("the launch code is 0000", true)), "Ctrl+C is a secret copy");
 
-    // Lock from the note: notes close, the manager asks for the password.
+    // Color and pin are saved with the note.
+    d.click(note, "Dark green");
+    d.click(note, "Always on top");
+    d.host.advance(Duration::from_millis(500));
+    d.frames(2);
+    assert!(d.host.window(note).is_some_and(|w| w.options().always_on_top), "pinned on top");
+    let n = d.st.with(|v| v.list_notes()).expect("notes").remove(0);
+    assert_eq!((n.color, n.always_on_top), (crate::vault::NoteColor::DarkGreen, true));
+
+    // Lock from the note: notes close, the clipboard clears, the manager asks again.
     d.click(note, "Lock vault");
     d.frames(2);
     assert_eq!(d.screen(), Screen::Unlock);
     assert_eq!(d.windows(), vec![manager], "the note window closed");
+    assert!(d.manager_visible(), "the manager comes back to unlock");
+    assert!(d.host.clipboard().is_none_or(|(t, _)| t.is_empty()), "lock clears a copied secret");
 
-    // A wrong password is refused, the right one opens the vault with the note.
+    // A wrong password is refused; the recovery key opens the vault with the note.
     d.type_into(manager, "Master password", "not the password!!");
     d.click(manager, "Unlock");
     d.until("the refusal", |d| d.st.error.get_untracked().ok().flatten().is_some());
     assert_eq!(d.screen(), Screen::Unlock);
-    d.type_into(manager, "Master password", pw);
+    d.click(manager, "Use recovery key");
+    d.type_into(manager, "Recovery key", &key);
     d.click(manager, "Unlock");
     d.until("unlock", |d| d.screen() == Screen::Unlocked);
     d.frames(2);
-    assert!(d.has(manager, "Open the launch code is 0000") || d.has(manager, "Open Untitled note"), "listed");
+    assert!(d.has(manager, "Open Launch"), "listed");
+    assert!(d.has(manager, "1 note · local vault"));
 
     // The tray opens every note; idle locks.
     d.host.send(HostEvent::Tray(TrayEvent::Menu(3)));
@@ -235,24 +330,233 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     assert_eq!(d.windows(), vec![manager]);
 }
 
-impl Driver {
-    /// Starts the app on `vault` and reads its first frames.
-    fn new(vault: std::path::PathBuf) -> Self {
-        let slot: Rc<RefCell<Option<St>>> = Rc::default();
-        let s2 = slot.clone();
-        let config = AppConfig::new("SecretSticky test").cpu_only().theme(
-            remedy_ui_themes::theme(&remedy_ui_themes::PALETTES[0]),
-            remedy_ui_themes::sheet,
-        );
-        let mut runner = Runner::with_geometry(config, GeometryStore::in_memory(), move |app: &App| {
-            *s2.borrow_mut() = Some(crate::state::start_at(app, Some(vault)));
-        });
-        let mut host = HeadlessHost::new();
-        host.run_frames(&mut runner, 1);
-        let st = slot.borrow().clone().expect("the app started");
-        let mut d = Driver { host, runner, st, trees: HashMap::new(), roots: HashMap::new() };
-        d.frames(2);
-        d
+/// The manager's header panels, list actions and footer, as the shipped app has them.
+#[test]
+fn every_manager_action() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let mut d = Driver::new(dir.path().join("vault.json"));
+    let manager = d.windows()[0];
+    d.type_into(manager, "Master password", PW);
+    d.type_into(manager, "Confirm password", PW);
+    d.click(manager, "Create vault");
+    d.until("the recovery key", |d| d.screen() == Screen::Recovery);
+    d.frames(2);
+    d.click(manager, "I already saved it — continue");
+    d.frames(2);
+    d.assert_accessible(&d.manager_ui());
+
+    // About: version, links, updates.
+    d.click(manager, "About");
+    assert!(d.has(manager, &format!("Version {}", env!("CARGO_PKG_VERSION"))));
+    for (label, url) in crate::manager::LINKS {
+        d.click(manager, label);
+        assert!(d.host.opened_urls().iter().any(|u| u == url), "{label} opens {url}");
+    }
+    assert!(d.has(manager, "Check for updates"));
+    d.assert_accessible(&d.manager_ui());
+    d.click(manager, "Close");
+    assert!(!d.has(manager, "Releases"), "About closed");
+
+    // Auto-lock: ten presets; the vault keeps the choice.
+    d.click(manager, "Auto-lock");
+    assert!(d.has(manager, "Auto-lock now 15 min"));
+    for (_, label) in crate::manager::AUTO_LOCK {
+        assert!(d.has(manager, label), "preset {label}");
+    }
+    d.assert_accessible(&d.manager_ui());
+    d.click(manager, "2 hr");
+    assert_eq!(d.st.with(|v| Ok(v.status().idle_lock_secs)).ok(), Some(7200));
+    assert!(d.has(manager, "Auto-lock now 2 hrs"));
+    d.click(manager, "Off");
+    assert_eq!(d.st.with(|v| Ok(v.status().idle_lock_secs)).ok(), Some(0));
+    d.click(manager, "Done");
+
+    // Password: refuses a short one, then changes it.
+    d.click(manager, "Password");
+    d.assert_accessible(&d.manager_ui());
+    d.type_into(manager, "Current password", PW);
+    d.type_into(manager, "New password", "short");
+    d.type_into(manager, "Confirm new password", "short");
+    d.click(manager, "Update password");
+    assert!(d.has(manager, "New password must be at least 12 characters."));
+    let new_pw = "a brand new master password";
+    d.type_into(manager, "Current password", PW);
+    d.type_into(manager, "New password", new_pw);
+    d.type_into(manager, "Confirm new password", new_pw);
+    d.click(manager, "Update password");
+    d.until("the change", |d| d.has(manager, crate::manager::PASSWORD_CHANGED));
+
+    // Notes: create two, delete one through the confirmation.
+    let before = d.windows();
+    d.click(manager, "New pink note");
+    let pink_win = *d.windows().iter().find(|w| !before.contains(w)).expect("the pink note's window");
+    d.type_into(pink_win, "Title", "Pink one");
+    d.host.advance(Duration::from_millis(500));
+    d.frames(2);
+    d.show_manager();
+    d.click(manager, "New blue note");
+    d.show_manager();
+    assert!(d.has(manager, "2 notes · local vault"));
+    let pink = d.st.notes.get_untracked().expect("notes").into_iter().find(|p| p.color == crate::vault::NoteColor::Pink);
+    let pink = pink.expect("the pink note");
+    d.click(manager, &format!("Delete {}", pink.shown_title()));
+    assert!(d.has(manager, "Delete note?"));
+    d.click(manager, "Cancel");
+    assert_eq!(Some(d.st.notes.with(Vec::len)), Some(2), "cancel keeps it");
+    d.click(manager, &format!("Delete {}", pink.shown_title()));
+    d.click(manager, "Delete");
+    assert_eq!(Some(d.st.notes.with(Vec::len)), Some(1), "deleted");
+    assert!(d.st.with(|v| v.get_note(&pink.id)).is_err());
+    assert_eq!(d.windows().len(), 2, "its window closed with it");
+
+    // Hide to tray; the tray brings the manager back; lock, unlock, quit.
+    d.click(manager, "Hide to tray");
+    assert!(!d.manager_visible());
+    d.host.send(HostEvent::Tray(TrayEvent::Activate));
+    d.frames(2);
+    assert!(d.manager_visible());
+    d.click(manager, "Lock");
+    assert_eq!(d.screen(), Screen::Unlock);
+    d.type_into(manager, "Master password", new_pw);
+    d.click(manager, "Unlock");
+    d.until("unlock with the new password", |d| d.screen() == Screen::Unlocked);
+    d.frames(2);
+    d.click(manager, "Quit");
+    assert!(d.host.has_exited(), "quit");
+}
+
+/// Vaults written by shipped releases (0.1.0, the first, and 0.1.8, the last Tauri release)
+/// open in this build through `SECRETSTICKY_VAULT`, show every note as it was, take edits,
+/// and read back afterwards through the shipped vault code with nothing lost. The fixtures
+/// and their expected contents were made by `compat/shipped.sh` with the release tags' own
+/// vault code.
+#[test]
+fn shipped_vaults_open_edit_and_reopen_without_loss() {
+    for (tag, pw) in [("v0.1.0", "old-pass9"), ("v0.1.8", PW)] {
+        shipped_vault_round_trip(tag, pw);
+    }
+}
+
+fn shipped_vault_round_trip(tag: &str, pw: &str) {
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("vault.json");
+    std::fs::copy(fixtures.join(format!("vault-{tag}.json")), &path).expect("copy the fixture");
+    let recovery = std::fs::read_to_string(fixtures.join(format!("{tag}.recovery"))).expect("recovery key");
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(fixtures.join(format!("vault-{tag}.expected.json"))).expect("expected"))
+            .expect("expected json");
+    let notes_want = expected["notes"].as_array().cloned().expect("notes");
+    let want = |id: &str| notes_want.iter().find(|n| n["id"] == id).cloned();
+
+    // The app finds the vault through the environment, as a second vault would.
+    // SAFETY: this is the only test that reads or writes SECRETSTICKY_VAULT, and the
+    // variable is set and read on this thread before the app starts.
+    unsafe { std::env::set_var("SECRETSTICKY_VAULT", &path) };
+    let mut d = Driver::from_env();
+    unsafe { std::env::remove_var("SECRETSTICKY_VAULT") };
+    let manager = d.windows()[0];
+    assert_eq!(d.screen(), Screen::Unlock, "{tag}: an existing vault asks for its password");
+    d.type_into(manager, "Master password", pw);
+    d.click(manager, "Unlock");
+    d.until("unlock", |d| d.screen() == Screen::Unlocked);
+    d.frames(2);
+    assert_eq!(d.st.idle_secs.get_untracked().ok(), Some(3600), "{tag}: auto-lock setting kept");
+    for n in &notes_want {
+        let title = crate::state::shown_title(n["title"].as_str().unwrap_or_default());
+        assert!(d.has(manager, &format!("Open {title}")), "{tag}: {title} listed");
+    }
+
+    // Every note opens with its text and pin as saved.
+    d.click(manager, "Open all");
+    d.frames(3);
+    let windows: Vec<_> = d.windows().into_iter().filter(|w| *w != manager).collect();
+    assert_eq!(windows.len(), notes_want.len(), "{tag}: every note opens");
+    for w in &windows {
+        let (title, pinned) = d.host.window(*w).map(|h| (h.options().title.clone(), h.options().always_on_top)).expect("w");
+        let n = notes_want
+            .iter()
+            .find(|n| crate::state::window_title(n["title"].as_str().unwrap_or_default()) == title)
+            .unwrap_or_else(|| panic!("{tag}: a note titled {title}"));
+        assert_eq!(pinned, n["always_on_top"].as_bool().unwrap_or(false), "{tag}: {title} pin");
+        let body = d.value(*w, "Note").unwrap_or_default();
+        assert_eq!(body, n["body"].as_str().unwrap_or_default(), "{tag}: {title} body");
+    }
+
+    // Edits: Wi-Fi gets new text, a color and loses its pin; "Second screen" is deleted; a
+    // new note is made; auto-lock changes; the password changes.
+    let wifi_id = notes_want.iter().find(|n| n["title"] == "Wi-Fi").and_then(|n| n["id"].as_str()).expect("wifi").to_owned();
+    let wifi = d.note_window("Wi-Fi");
+    d.replace_into(wifi, "Note", "Guest network changed: correct-horse-2026");
+    d.click(wifi, "Blue");
+    d.click(wifi, "Unpin");
+    d.host.advance(Duration::from_millis(500));
+    d.frames(2);
+    d.click(wifi, "Close");
+    d.show_manager();
+    d.click(manager, "Delete Second screen");
+    d.click(manager, "Delete");
+    let before = d.windows();
+    d.click(manager, "New purple note");
+    let new_note = *d.windows().iter().find(|w| !before.contains(w)).expect("the new note's window");
+    d.type_into(new_note, "Title", "Made in RemedyUI");
+    d.type_into(new_note, "Note", "new body");
+    d.host.advance(Duration::from_millis(500));
+    d.frames(2);
+    d.show_manager();
+    d.click(manager, "Auto-lock");
+    d.click(manager, "2 hr");
+    d.click(manager, "Done");
+    let new_pw = "the new master password 2026";
+    d.click(manager, "Password");
+    d.type_into(manager, "Current password", pw);
+    d.type_into(manager, "New password", new_pw);
+    d.type_into(manager, "Confirm new password", new_pw);
+    d.click(manager, "Update password");
+    d.until("the change", |d| d.has(manager, crate::manager::PASSWORD_CHANGED));
+    d.click(manager, "Lock");
+    assert_eq!(d.screen(), Screen::Unlock);
+    drop(d);
+
+    // Read back with the shipped vault code (src-tauri/src/vault.rs, the module the Tauri
+    // app runs), by the new password and by the original recovery key.
+    for by_recovery in [false, true] {
+        let mut v = crate::vault::Vault::open_path(path.clone()).expect("the shipped code opens it");
+        if by_recovery {
+            v.unlock_with_recovery(recovery.trim()).expect("the recovery key still opens it");
+        } else {
+            v.unlock(new_pw).expect("the new password opens it");
+        }
+        assert_eq!(v.status().idle_lock_secs, 7200, "{tag}: auto-lock saved");
+        let after = v.list_notes().expect("notes");
+        assert_eq!(after.len(), notes_want.len(), "{tag}: one deleted, one added");
+        for n in &after {
+            if n.id == wifi_id {
+                assert_eq!(n.body, "Guest network changed: correct-horse-2026");
+                assert_eq!((n.color.clone(), n.always_on_top), (crate::vault::NoteColor::Blue, false));
+                assert_eq!(n.title, "Wi-Fi");
+            } else if n.title == "Made in RemedyUI" {
+                assert_eq!((n.body.as_str(), n.color.clone()), ("new body", crate::vault::NoteColor::Purple));
+            } else {
+                // Untouched notes are exactly as the shipped release wrote them.
+                let w = want(&n.id).unwrap_or_else(|| panic!("{tag}: unexpected note {}", n.title));
+                assert_ne!(w["title"], "Second screen", "{tag}: the deleted note stays deleted");
+                assert_eq!(n.title, w["title"].as_str().unwrap_or_default(), "{tag}: title");
+                assert_eq!(n.body, w["body"].as_str().unwrap_or_default(), "{tag}: body of {}", n.title);
+                assert_eq!(serde_json::to_value(&n.color).ok(), Some(w["color"].clone()), "{tag}: color");
+                assert_eq!(n.always_on_top, w["always_on_top"].as_bool().unwrap_or(false), "{tag}: pin");
+                for (k, got) in [("x", n.x), ("y", n.y), ("width", n.width), ("height", n.height)] {
+                    assert_eq!(Some(got), w[k].as_f64(), "{tag}: {k} of {}", n.title);
+                }
+            }
+        }
+        v.lock();
+    }
+    // For a cross-check with a release's own vault code (`compat/shipped.sh <tag> dump`).
+    if let Some(out) = std::env::var_os("SECRETSTICKY_COMPAT_OUT") {
+        let out = std::path::PathBuf::from(out);
+        let _ = std::fs::create_dir_all(&out);
+        let _ = std::fs::copy(&path, out.join(format!("after-{tag}.json")));
     }
 }
 
@@ -304,7 +608,8 @@ fn png(path: &std::path::Path, w: u32, h: u32, rgba: &[u8]) {
     let _ = std::fs::write(path, out);
 }
 
-/// Writes the screens as PNGs to `SECRETSTICKY_SHOTS` (run with `--ignored`).
+/// Writes every screen as PNGs to `SECRETSTICKY_SHOTS` (run with `--ignored`): the "after"
+/// evidence beside the shipped app's in `port-evidence/before`.
 #[test]
 #[ignore = "writes images for a person to look at"]
 fn screenshots() {
@@ -312,34 +617,88 @@ fn screenshots() {
     let _ = std::fs::create_dir_all(&out);
     let dir = tempfile::tempdir().expect("temp dir");
     let mut d = Driver::new(dir.path().join("vault.json"));
-    let shot = |d: &Driver, w: WindowId, name: &str| {
+    let shot = |d: &mut Driver, w: WindowId, name: &str, size: Option<(u32, u32)>| {
+        if let Some((pw, ph)) = size {
+            d.host.user_resize(w, remedy_ui::core::Size::new(pw as f32, ph as f32));
+            d.frames(3);
+        }
         let win = d.host.window(w).expect("window");
         let (pw, ph) = (win.size().0, win.size().1);
-        png(&out.join(name), pw, ph, win.surface());
+        png(&out.join(format!("{name}.png")), pw, ph, win.surface());
     };
     let manager = d.windows()[0];
-    shot(&d, manager, "1-setup.png");
-    let pw = "correct horse battery staple";
-    d.type_into(manager, "Master password", pw);
-    d.type_into(manager, "Confirm password", pw);
+    shot(&mut d, manager, "01-setup", None);
+    d.type_into(manager, "Master password", "short");
+    d.type_into(manager, "Confirm password", "short");
+    d.click(manager, "Create vault");
+    shot(&mut d, manager, "01-setup-short-password", None);
+    d.type_into(manager, "Master password", PW);
+    d.type_into(manager, "Confirm password", PW);
     d.click(manager, "Create vault");
     d.until("recovery", |d| d.screen() == Screen::Recovery);
     d.frames(3);
-    shot(&d, manager, "2-recovery.png");
+    shot(&mut d, manager, "02-recovery-key", None);
     d.click(manager, "I already saved it — continue");
-    d.click(manager, "New pink note");
+    d.frames(3);
+    shot(&mut d, manager, "04-manager-empty", None);
+    let samples = [
+        ("New yellow note", "Wi-Fi", "Guest network: hunter2hunter2\nRouter admin: see drawer"),
+        ("New dark green note", "Server keys", "staging api key: sk-sample-0000\nrotate monthly"),
+        ("New pink note", "", ""),
+        ("New blue note", "Bank PIN reminder (sample)", "Not a real PIN."),
+    ];
+    for (button, title, body) in samples {
+        d.show_manager();
+        let before = d.windows();
+        d.click(manager, button);
+        d.frames(2);
+        let w = *d.windows().iter().find(|w| !before.contains(w)).expect("the new note's window");
+        if !title.is_empty() {
+            d.type_into(w, "Title", title);
+            d.type_into(w, "Note", body);
+        }
+        d.host.advance(Duration::from_millis(500));
+        d.frames(3);
+    }
+    d.show_manager();
+    d.frames(3);
+    shot(&mut d, manager, "04-manager", None);
+    shot(&mut d, manager, "04-manager-narrow", Some((400, 500)));
+    shot(&mut d, manager, "04-manager-wide", Some((900, 700)));
+    d.host.user_resize(manager, remedy_ui::core::Size::new(440.0, 560.0));
+    d.frames(3);
+    d.click(manager, "About");
+    shot(&mut d, manager, "05-about", None);
+    d.click(manager, "About");
+    d.click(manager, "Password");
+    shot(&mut d, manager, "06-password", None);
+    d.click(manager, "Password");
+    d.click(manager, "Auto-lock");
+    shot(&mut d, manager, "07-auto-lock", None);
+    shot(&mut d, manager, "07-auto-lock-narrow", Some((400, 500)));
+    d.host.user_resize(manager, remedy_ui::core::Size::new(440.0, 560.0));
+    d.click(manager, "Auto-lock");
+    d.click(manager, "Delete Wi-Fi");
+    shot(&mut d, manager, "08-delete-dialog", None);
+    d.click(manager, "Cancel");
+    let wifi = d.note_window("Wi-Fi");
+    shot(&mut d, wifi, "10-note-yellow", None);
+    let keys = d.note_window("Server keys");
+    shot(&mut d, keys, "10-note-dark-green", None);
+    let empty = d.note_window("Sticky note");
+    shot(&mut d, empty, "10-note-empty-pink", None);
+    let bank = d.note_window("Bank PIN reminder (sample)");
+    shot(&mut d, bank, "10-note-wide", Some((600, 420)));
+    d.click(wifi, COPY);
+    shot(&mut d, wifi, "10-note-copied", None);
+    d.click(wifi, "Lock vault");
+    d.frames(3);
+    shot(&mut d, manager, "03-unlock", None);
+    d.type_into(manager, "Master password", "not the password!!");
+    d.click(manager, "Unlock");
+    d.until("refusal", |d| d.st.error.get_untracked().ok().flatten().is_some());
     d.frames(2);
-    d.click(manager, "New dark green note");
-    d.frames(3);
-    let notes: Vec<_> = d.windows().into_iter().filter(|w| *w != manager).collect();
-    d.type_into(notes[0], "Title", "Wi-Fi");
-    d.type_into(notes[0], "Note", "guest network password: hunter2hunter2");
-    d.host.advance(Duration::from_millis(500));
-    d.frames(3);
-    shot(&d, manager, "3-manager.png");
-    shot(&d, notes[0], "4-note-pink.png");
-    shot(&d, notes[1], "5-note-dark.png");
-    d.click(notes[0], "Lock vault");
-    d.frames(3);
-    shot(&d, manager, "6-unlock.png");
+    shot(&mut d, manager, "03-unlock-wrong-password", None);
+    d.click(manager, "Use recovery key");
+    shot(&mut d, manager, "03-unlock-recovery-key", None);
 }
