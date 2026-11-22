@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
 import { clearClipboard } from "./clipboard";
+import { errorText, localizeMessage, useI18n } from "./i18n";
 import type { VaultStatus } from "./types";
 import { UnlockScreen } from "./screens/UnlockScreen";
 import { ManagerScreen } from "./screens/ManagerScreen";
@@ -54,6 +55,11 @@ function resolveNoteId(): string | null {
 }
 
 export default function App() {
+  const { t, locale } = useI18n();
+  const tRef = useRef(t);
+  const localeRef = useRef(locale);
+  tRef.current = t;
+  localeRef.current = locale;
   const [noteId, setNoteId] = useState<string | null>(() => resolveNoteId());
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +71,7 @@ export default function App() {
       setStatus(s);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(localizeMessage(errorText(e), localeRef.current, tRef.current));
     } finally {
       setBoot(false);
     }
@@ -136,7 +142,7 @@ export default function App() {
               S
             </div>
           )}
-          <p>{noteId ? "Loading note…" : "Loading SecretSticky…"}</p>
+          <p>{noteId ? t("boot.loadingNote") : t("boot.loadingApp")}</p>
           {error && <p className="error">{error}</p>}
         </div>
       </div>
@@ -148,9 +154,9 @@ export default function App() {
     if (!status.unlocked) {
       return (
         <div className="note-locked">
-          <p>Vault locked</p>
+          <p>{t("noteLocked.vaultLocked")}</p>
           <button type="button" onClick={() => api.showMain()}>
-            Unlock
+            {t("common.unlock")}
           </button>
         </div>
       );

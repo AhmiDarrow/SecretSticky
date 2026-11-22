@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-15
+
+Now available in Spanish, French, German, Portuguese (Brazil), Italian, Russian, Polish, Japanese, Korean and Chinese (Simplified). Apps use your system language by default; change it any time in Settings → Language.
+
+Hi I'm Ahmi, hope this helps!
+
+### Added
+
+- SecretSticky follows the Windows language the first time it opens, and falls back to English when that language is not included. A language picker on the unlock screen, the recovery screen, and in the manager switches immediately. The choice is stored in `settings.json` next to the vault, so notes, the master password, and auto-lock are left alone.
+- Interface languages: Spanish, French, German, Portuguese (Brazil), Italian, Russian, Polish, Japanese, Korean, and Chinese (Simplified). English stays the source text.
+
+### Install and update
+
+- Windows setup: `SecretSticky_0.2.0_x64-setup.exe` (Start Menu, desktop shortcut, and taskbar icon). `SecretSticky_0.2.0_x64_en-US.msi` is attached as well.
+- Already installed: **About → Check for updates**. The update replaces the application only.
+- Notes stay in `%APPDATA%\SecretSticky` and unlock with the same master password and recovery key. Existing vaults read and write as before.
+
+Same text: [docs/RELEASE-0.2.0.md](docs/RELEASE-0.2.0.md).
+
 ## [0.1.8] — 2026-11-14
 
 Auto-lock closes your notes, and locking saves the last keystrokes before the notes close.
