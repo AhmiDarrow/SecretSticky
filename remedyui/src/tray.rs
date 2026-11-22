@@ -15,10 +15,11 @@ pub const TOOLTIP: &str = "SecretSticky — encrypted sticky notes";
 
 /// The tray's menu, top to bottom.
 pub fn menu() -> Vec<TrayItem> {
-    let item = |id, label: &str| TrayItem::Item { id, label: label.to_owned(), enabled: true };
+    let item = TrayItem::item;
     vec![
         item(NEW_NOTE, "New note"),
-        item(SHOW_MANAGER, "Show manager"),
+        // Bold where the platform shows a default: what clicking the icon does.
+        TrayItem::Item { id: SHOW_MANAGER, label: "Show manager".to_owned(), enabled: true, default: true },
         item(OPEN_ALL, "Open all notes"),
         item(LOCK, "Lock vault"),
         TrayItem::Separator,

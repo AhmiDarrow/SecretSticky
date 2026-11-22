@@ -138,7 +138,17 @@ fn centered(ui: &Ui, card: El) -> El {
 /// The app mark at `size`, or nothing when the artwork could not be decoded.
 fn mark(ui: &Ui, size: f32) -> El {
     match crate::brand::mark() {
-        Some(img) => w::image(ui, img, "SecretSticky").width(size).height(size).semantics(Semantics::new(Role::Image).hidden(true)),
+        // The shipped `.brand-mark`: a rounded tile (11 px at 40) on a soft drop shadow.
+        Some(img) => w::image(ui, img, "SecretSticky")
+            .width(size)
+            .height(size)
+            .style(StylePatch::new().radius(size * 0.275).shadow(remedy_ui::style::Shadow::new(
+                0.0,
+                size * 0.1,
+                size * 0.35,
+                remedy_ui::core::Color::BLACK.with_alpha(0.28),
+            )))
+            .semantics(Semantics::new(Role::Image).hidden(true)),
         None => w::spacer(ui).width(0.0),
     }
 }
