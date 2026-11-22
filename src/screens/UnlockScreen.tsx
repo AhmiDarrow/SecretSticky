@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { copySecret } from "../clipboard";
+import {
+  errorText,
+  LanguageSelect,
+  localizeMessage,
+  RichText,
+  useI18n,
+} from "../i18n";
 import type { VaultStatus } from "../types";
 import appMark from "../assets/app-mark.png";
 
@@ -10,6 +17,7 @@ interface Props {
 }
 
 export function UnlockScreen({ status, onUnlocked }: Props) {
+  const { t, locale } = useI18n();
   const isSetup = !status.initialized;
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -18,6 +26,10 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [useRecovery, setUseRecovery] = useState(false);
 
+  const showError = (err: unknown) => {
+    setError(localizeMessage(errorText(err), locale, t));
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -25,10 +37,10 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
     try {
       if (isSetup) {
         if (password.length < 12) {
-          throw new Error("Use at least 12 characters");
+          throw new Error(t("unlock.errShort"));
         }
         if (password !== confirm) {
-          throw new Error("Passwords do not match");
+          throw new Error(t("unlock.errMismatch"));
         }
         const key = await api.setup(password);
         setRecoveryKey(key);
@@ -42,7 +54,7 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
         await onUnlocked();
       }
     } catch (err) {
-      setError(String(err));
+      showError(err);
     } finally {
       setBusy(false);
     }
@@ -55,11 +67,9 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
           <div className="logo-mark" aria-hidden>
             <img src={appMark} alt="" width={44} height={44} draggable={false} />
           </div>
-          <h1>Save your recovery key</h1>
+          <h1>{t("recovery.title")}</h1>
           <p className="muted">
-            This is shown <strong>once</strong>. Store it offline. Losing both
-            your master password and this key means your notes cannot be
-            recovered.
+            <RichText text={t("recovery.body")} />
           </p>
           <pre className="recovery">{recoveryKey}</pre>
           <div className="gate-actions">
@@ -71,7 +81,7 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
                 await onUnlocked();
               }}
             >
-              Copy key (2 min) — continue
+              {t("recovery.copyContinue")}
             </button>
             <button
               type="button"
@@ -80,13 +90,11 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
                 await onUnlocked();
               }}
             >
-              I already saved it — continue
+              {t("recovery.savedContinue")}
             </button>
           </div>
-          <p className="fineprint">
-            Protects data at rest on disk. Does not protect a fully compromised
-            PC while unlocked.
-          </p>
+          <LanguageSelect compact />
+          <p className="fineprint">{t("recovery.fineprint")}</p>
         </div>
       </div>
     );
@@ -98,19 +106,17 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
         <div className="logo-mark" aria-hidden>
           <img src={appMark} alt="" width={44} height={44} draggable={false} />
         </div>
-        <h1>{isSetup ? "Create your vault" : "Unlock SecretSticky"}</h1>
+        <h1>{isSetup ? t("unlock.titleSetup") : t("unlock.titleUnlock")}</h1>
         <p className="muted">
-          {isSetup
-            ? "Choose a strong master password. Notes are encrypted on disk."
-            : "Enter your master password to open encrypted sticky notes."}
+          {isSetup ? t("unlock.blurbSetup") : t("unlock.blurbUnlock")}
         </p>
         <form onSubmit={submit} className="gate-form">
           <label>
             {isSetup
-              ? "Master password"
+              ? t("unlock.masterPassword")
               : useRecovery
-                ? "Recovery key"
-                : "Master password"}
+                ? t("unlock.recoveryKey")
+                : t("unlock.masterPassword")}
             <input
               type={useRecovery ? "text" : "password"}
               autoFocus
@@ -123,7 +129,7 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
           </label>
           {isSetup && (
             <label>
-              Confirm password
+              {t("unlock.confirmPassword")}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -135,11 +141,14 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
           )}
           {error && <p className="error">{error}</p>}
           <button type="submit" className="primary" disabled={busy}>
-            {busy ? "Working…" : isSetup ? "Create vault" : "Unlock"}
+            {busy
+              ? t("common.working")
+              : isSetup
+                ? t("unlock.createVault")
+                : t("common.unlock")}
           </button>
         </form>
 
-        {/* Escape hatches — setup has nowhere else to "go back", so offer tray/quit */}
         <div className="gate-actions">
           {!isSetup && status.has_recovery_key && (
             <button
@@ -152,36 +161,35 @@ export function UnlockScreen({ status, onUnlocked }: Props) {
                 setError(null);
               }}
             >
-              {useRecovery ? "Use master password" : "Use recovery key"}
+              {useRecovery ? t("unlock.useMaster") : t("unlock.useRecovery")}
             </button>
           )}
           <button
             type="button"
             className="ghost"
             disabled={busy}
-            title="Hide to tray — open again from the tray icon"
+            title={t("unlock.hideTrayTitle")}
             onClick={() => {
               void api.hideMain();
             }}
           >
-            {isSetup ? "Not now — hide to tray" : "Hide to tray"}
+            {isSetup ? t("unlock.hideTraySetup") : t("unlock.hideTray")}
           </button>
           <button
             type="button"
             className="ghost danger"
             disabled={busy}
-            title="Quit SecretSticky"
+            title={t("unlock.quitTitle")}
             onClick={() => {
               void api.quitApp();
             }}
           >
-            Quit
+            {t("common.quit")}
           </button>
         </div>
 
-        <p className="fineprint">
-          Local only · Argon2id + XChaCha20-Poly1305 · no cloud
-        </p>
+        <LanguageSelect compact />
+        <p className="fineprint">{t("unlock.fineprint")}</p>
       </div>
     </div>
   );
