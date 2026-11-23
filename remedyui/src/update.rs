@@ -18,10 +18,18 @@ use crate::state::St;
 /// The release signing key (the minisign public key in `tauri.conf.json`).
 const PUBLIC_KEY: &str = "RWRCCbWCyL1aX4p64dsFYQVfrMxfQON25xh0UGvI5Nze/WsVgz9w1iW2";
 
+/// This platform's release asset and how it is put in place: Windows runs the signed
+/// installer (which closes the app and replaces it); Linux replaces the program itself
+/// (`SecretSticky_<version>_linux-x86_64`, the executable the archive also holds).
+#[cfg(windows)]
+const ASSET: (&str, fn() -> Apply) = ("_x64-setup.exe", || Apply::RunInstaller(Vec::new()));
+#[cfg(not(windows))]
+const ASSET: (&str, fn() -> Apply) = ("_linux-x86_64", || Apply::ReplaceExecutable);
+
 fn config() -> UpdateConfig {
     UpdateConfig::new(
         env!("CARGO_PKG_VERSION"),
-        Feed::GitHub { owner: "AhmiDarrow".into(), repo: "SecretSticky".into(), asset: "_x64-setup.exe".into() },
+        Feed::GitHub { owner: "AhmiDarrow".into(), repo: "SecretSticky".into(), asset: ASSET.0.into() },
         PUBLIC_KEY,
     )
 }
@@ -120,7 +128,7 @@ fn restart(st: &St, up_: &Rc<Updater>) {
     let Some(file) = up_.file.borrow().clone() else { return };
     // Save and lock first: the installer replaces this program.
     crate::state::lock_all(st);
-    match up::apply(&file, &Apply::RunInstaller(Vec::new())) {
+    match up::apply(&file, &(ASSET.1)()) {
         Ok(()) => crate::state::quit(st),
         Err(e) => up_.state.set(UpdateState::Failed(e.to_string())),
     }

@@ -170,5 +170,7 @@
   "update.ready": "更新 {version} をインストールできます。",
   "update.upToDate": "最新バージョンです（{version}）。",
   "font.blurb": "すべてのウィンドウの書体を選びます。メモの内容は変わりません。",
-  "font.title": "フォント"
+  "font.title": "フォント",
+  "textSize.blurb": "すべてのウィンドウの文字を大きくまたは小さくします。メモの内容は変わりません。",
+  "textSize.title": "文字サイズ"
 }

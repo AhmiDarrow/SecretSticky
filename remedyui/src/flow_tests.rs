@@ -736,6 +736,15 @@ fn screenshots() {
     shot(&mut d, bank, "14-note-ahmi-pixel", None);
     shot(&mut d, manager, "14-manager-ahmi-pixel", None);
     crate::state::set_font(&d.st, "inter");
+    crate::state::set_text_size(&d.st, "130");
+    d.frames(3);
+    shot(&mut d, bank, "15-note-130", None);
+    d.click(manager, "Language");
+    d.frames(3);
+    shot(&mut d, manager, "15-language-panel-130", Some((440, 900)));
+    d.host.user_resize(manager, remedy_ui::core::Size::new(440.0, 560.0));
+    d.click(manager, "Language");
+    crate::state::set_text_size(&d.st, "100");
     d.frames(3);
     d.click(wifi, COPY);
     shot(&mut d, wifi, "10-note-copied", None);
@@ -841,6 +850,20 @@ fn language_switches_everything_at_once_and_leaves_the_vault_alone() {
     d.click(manager, "Inter");
     d.frames(2);
     assert_eq!(crate::settings::load_font(dir.path()), "inter");
+
+    // The text size: every step offered; one makes the note's text larger at once, is saved
+    // beside the font, and leaves the vault alone.
+    assert!(d.has(manager, &t("de", "textSize.title")));
+    let before = body_rows(&d);
+    d.click(manager, "130%");
+    d.frames(3);
+    assert_ne!(body_rows(&d), before, "the note's text redraws larger");
+    assert_eq!(crate::settings::load_text_size(dir.path()), "130");
+    assert_eq!(crate::settings::load_font(dir.path()), "inter", "the font is kept");
+    assert_eq!(std::fs::read(&path).expect("vault"), vault_before, "a text size never writes the vault");
+    d.click(manager, "100%");
+    d.frames(2);
+    assert_eq!(crate::settings::load_text_size(dir.path()), "100");
 
     // Locked, the unlock screen is German too (with its picker), and a switch back to
     // English (what the picker calls) reaches it at once.

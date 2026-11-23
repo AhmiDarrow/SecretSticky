@@ -170,5 +170,7 @@
   "update.ready": "更新 {version} 已可以安装。",
   "update.upToDate": "你正在使用最新版本（{version}）。",
   "font.blurb": "选择所有窗口使用的字体。你的便笺保持不变。",
-  "font.title": "字体"
+  "font.title": "字体",
+  "textSize.blurb": "放大或缩小所有窗口中的文字。你的便笺保持不变。",
+  "textSize.title": "文字大小"
 }

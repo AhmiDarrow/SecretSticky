@@ -170,5 +170,7 @@
   "update.ready": "Aktualizacja {version} jest gotowa do instalacji.",
   "update.upToDate": "Masz najnowszą wersję ({version}).",
   "font.blurb": "Wybierz krój pisma dla wszystkich okien. Twoje notatki pozostaną bez zmian.",
-  "font.title": "Czcionka"
+  "font.title": "Czcionka",
+  "textSize.blurb": "Powiększa lub zmniejsza tekst we wszystkich oknach. Twoje notatki pozostaną bez zmian.",
+  "textSize.title": "Rozmiar tekstu"
 }
