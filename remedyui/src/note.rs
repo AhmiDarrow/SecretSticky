@@ -347,8 +347,12 @@ pub fn open(st: &St, dto: NoteDto) {
             .child(message.grow(1.0))
             .child(grip);
 
+        // Both columns may be shorter than their text (CSS `min-height: 0`): the body takes
+        // the room left in the window and scrolls, the footer and grip stay in view.
+        let fit = |l: &mut remedy_ui::layout::LayoutStyle| l.min_height = remedy_ui::layout::Length::Px(0.0);
         let content = w::column(ui)
             .grow(1.0)
+            .layout(fit)
             .fill_width()
             .gap(unit)
             .padding(crate::state::pad(unit * 2.0, unit * 3.0, 0.0, unit * 3.0))
@@ -358,7 +362,7 @@ pub fn open(st: &St, dto: NoteDto) {
             let c = color.get();
             StylePatch::new().background(fill(&c)).foreground(ink(&c))
         };
-        ui.root().child(w::column(ui).grow(1.0).fill_width().style(note_style).child(bar).child(content).child(footer));
+        ui.root().child(w::column(ui).grow(1.0).layout(fit).fill_width().style(note_style).child(bar).child(content).child(footer));
         body.el().focus();
     });
     *window_slot.borrow_mut() = Some(window.clone());
