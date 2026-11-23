@@ -20,6 +20,7 @@ mod brand;
 mod fonts;
 mod lang;
 mod manager;
+mod settings;
 mod note;
 mod state;
 mod theme;

@@ -168,5 +168,7 @@
   "update.downloading": "Update wird heruntergeladen…",
   "update.downloadingPct": "Update wird heruntergeladen… {pct} %",
   "update.ready": "Update {version} kann installiert werden.",
-  "update.upToDate": "Sie haben die neueste Version ({version})."
+  "update.upToDate": "Sie haben die neueste Version ({version}).",
+  "font.blurb": "Wählen Sie die Schrift für alle Fenster. Ihre Notizen bleiben unverändert.",
+  "font.title": "Schriftart"
 }

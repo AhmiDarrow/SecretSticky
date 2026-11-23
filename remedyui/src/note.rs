@@ -210,19 +210,27 @@ pub fn open(st: &St, dto: NoteDto) {
         let saving = w::text(ui, move || if saved.get() { "✓".to_owned() } else { "…".to_owned() })
             .style(move || StylePatch::new().foreground(ink(&color.get()).with_alpha(0.7)))
             .semantics(move || Semantics::new(Role::Status).label(l.t(if saved.get() { "note.saved" } else { "note.saving" })));
+        // Pinned shows: a filled well behind a full-strength pin, and the tooltip offers
+        // Unpin (the shipped app swapped its pin glyph and title the same way).
         let pin = {
             let (win, pending, schedule) = (win.clone(), pending2.clone(), schedule2.clone());
-            tool(
-                Icon::Pin,
-                "note.pin",
-                Box::new(move || {
-                    let on = !pinned.get();
-                    pinned.set(on);
-                    win.set_always_on_top(on);
-                    pending.borrow_mut().pinned = Some(on);
-                    schedule();
-                }),
-            )
+            let tip = move || l.t(if pinned.get() { "note.unpin" } else { "note.pin" });
+            w::icon_button(ui, Icon::Pin, tip, move || {
+                let on = !pinned.get();
+                pinned.set(on);
+                win.set_always_on_top(on);
+                pending.borrow_mut().pinned = Some(on);
+                schedule();
+            })
+            .variant("quiet")
+            .style(move || {
+                let ink = ink(&color.get());
+                if pinned.get() {
+                    StylePatch::new().background(ink.with_alpha(0.18)).foreground(ink).radius(6.0)
+                } else {
+                    StylePatch::new().background(Color::TRANSPARENT).foreground(ink.with_alpha(0.55))
+                }
+            })
         };
         let pin2 = pin.clone();
         let pin = pin.bind(move || pin2.state(States::CHECKED, pinned.get())).semantics(move || {

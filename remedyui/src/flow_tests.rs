@@ -798,6 +798,24 @@ fn language_switches_everything_at_once_and_leaves_the_vault_alone() {
     assert!(d.has(note, &t("de", "note.lockVault")), "note toolbar in German");
     d.assert_accessible(&d.manager_ui());
 
+    // The font: every choice offered under the languages; one applies and is saved beside
+    // the language, and the vault is untouched.
+    assert!(d.has(manager, &t("de", "font.title")));
+    for (_, _, name) in crate::fonts::CHOICES {
+        assert!(d.has(manager, name), "{name} offered");
+    }
+    d.click(manager, "Ahmi Pixel");
+    d.frames(2);
+    assert_eq!(remedy_ui::reactive::untrack(|| d.st.font.get()), "ahmi-pixel");
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("settings.json")).expect("settings")).expect("json");
+    assert_eq!((saved["lang"].as_str(), saved["font"].as_str()), (Some("de"), Some("ahmi-pixel")));
+    assert_eq!(crate::settings::load_font(dir.path()), "ahmi-pixel", "the next start uses it");
+    assert_eq!(std::fs::read(&path).expect("vault"), vault_before, "choosing a font never writes the vault");
+    d.click(manager, "Inter");
+    d.frames(2);
+    assert_eq!(crate::settings::load_font(dir.path()), "inter");
+
     // Locked, the unlock screen is German too (with its picker), and a switch back to
     // English (what the picker calls) reaches it at once.
     d.click(manager, &t("de", "manager.lock"));

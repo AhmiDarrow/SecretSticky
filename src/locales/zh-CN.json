@@ -168,5 +168,7 @@
   "update.downloading": "正在下载更新…",
   "update.downloadingPct": "正在下载更新… {pct}%",
   "update.ready": "更新 {version} 已可以安装。",
-  "update.upToDate": "你正在使用最新版本（{version}）。"
+  "update.upToDate": "你正在使用最新版本（{version}）。",
+  "font.blurb": "选择所有窗口使用的字体。你的便笺保持不变。",
+  "font.title": "字体"
 }

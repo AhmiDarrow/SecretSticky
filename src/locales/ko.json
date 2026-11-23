@@ -168,5 +168,7 @@
   "update.downloading": "업데이트를 받는 중…",
   "update.downloadingPct": "업데이트를 받는 중… {pct}%",
   "update.ready": "업데이트 {version}을(를) 설치할 수 있습니다.",
-  "update.upToDate": "최신 버전입니다 ({version})."
+  "update.upToDate": "최신 버전입니다 ({version}).",
+  "font.blurb": "모든 창의 글꼴을 선택합니다. 메모는 그대로 유지됩니다.",
+  "font.title": "글꼴"
 }
