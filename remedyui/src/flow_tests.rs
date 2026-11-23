@@ -725,6 +725,18 @@ fn screenshots() {
     shot(&mut d, empty, "10-note-empty-pink", None);
     let bank = d.note_window("Bank PIN reminder (sample)");
     shot(&mut d, bank, "10-note-wide", Some((600, 420)));
+    // 1.0.1: a long note stays inside its window and scrolls; the pin shows it is on.
+    let long: Vec<String> = (1..=60).map(|n| format!("line {n} of a long note")).collect();
+    d.replace_into(bank, "Note", &long.join("\n"));
+    d.click(bank, &secretsticky_shipped_i18n::t("en", "note.pin"));
+    d.frames(3);
+    shot(&mut d, bank, "14-note-long-pinned", None);
+    crate::state::set_font(&d.st, "ahmi-pixel");
+    d.frames(3);
+    shot(&mut d, bank, "14-note-ahmi-pixel", None);
+    shot(&mut d, manager, "14-manager-ahmi-pixel", None);
+    crate::state::set_font(&d.st, "inter");
+    d.frames(3);
     d.click(wifi, COPY);
     shot(&mut d, wifi, "10-note-copied", None);
     d.click(wifi, "Lock vault");
@@ -776,6 +788,10 @@ fn language_switches_everything_at_once_and_leaves_the_vault_alone() {
     d.frames(2);
     d.click(manager, "New yellow note");
     let note = d.note_window("Sticky note");
+    // Some text in the note, saved, so a font change has glyphs to redraw.
+    let created = std::fs::read(&path).expect("vault");
+    d.type_into(note, "Note", "Wi-Fi password: hunter2 and more words");
+    d.until("the note saved", |_| std::fs::read(&path).ok().as_ref() != Some(&created));
     d.show_manager();
     let vault_before = std::fs::read(&path).expect("vault");
 
@@ -804,8 +820,18 @@ fn language_switches_everything_at_once_and_leaves_the_vault_alone() {
     for (_, _, name) in crate::fonts::CHOICES {
         assert!(d.has(manager, name), "{name} offered");
     }
+    // The note's text is drawn again in the new face (a text area keeps its box, and once
+    // kept its old glyphs too): the rows under the toolbar change.
+    d.frames(3);
+    let body_rows = |d: &Driver| {
+        let win = d.host.window(note).expect("note");
+        let (w, h) = (win.size().0 as usize, win.size().1 as usize);
+        win.surface()[w * 4 * (h / 3)..w * 4 * h].to_vec()
+    };
+    let before = body_rows(&d);
     d.click(manager, "Ahmi Pixel");
-    d.frames(2);
+    d.frames(3);
+    assert_ne!(body_rows(&d), before, "the note's text redraws in the chosen font");
     assert_eq!(remedy_ui::reactive::untrack(|| d.st.font.get()), "ahmi-pixel");
     let saved: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(dir.path().join("settings.json")).expect("settings")).expect("json");
