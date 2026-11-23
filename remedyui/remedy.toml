@@ -17,3 +17,7 @@ registry = ['Software\ahmi\SecretSticky']
 mutex = "com.ahmi.secretsticky-sim"
 # Releases 0.1.5 to 0.2.0 also shipped a per-machine MSI.
 msi_name = "SecretSticky"
+
+[linux]
+# The oldest glibc the Linux build runs on (Debian 10, RHEL 8, Ubuntu 20.04 and later).
+glibc = "2.28"
