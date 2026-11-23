@@ -826,7 +826,25 @@ fn language(st: &St, ui: &Ui, panel: Signal<Panel>) -> El {
         .child(w::heading(ui, 3, l.k("font.title")))
         .child(fineprint(ui, l.k("font.blurb")))
         .child(fonts)
+        .child(w::heading(ui, 3, l.k("textSize.title")))
+        .child(fineprint(ui, l.k("textSize.blurb")))
+        .child(text_sizes(st, ui))
         .child(panel_footer(ui, move || format!("{}: {}", l.t("language.current"), l.native()), l.k("common.close"), panel))
+}
+
+/// The text sizes, as percentages of the designed size; the chosen one highlighted.
+fn text_sizes(st: &St, ui: &Ui) -> El {
+    let (unit, l, size) = (ui.theme().spacing.unit, st.lang, st.text_size);
+    let row = crate::settings::TEXT_SIZES.iter().fold(w::wrap(ui).gap(unit * 1.5).fill_width(), |row, &(id, pct)| {
+        let st = st.clone();
+        let name = format!("{pct}%");
+        let b = w::button(ui, name.clone(), move || state::set_text_size(&st, id))
+            .grow(1.0)
+            .layout(|l| l.basis = remedy_ui::layout::Length::Px(64.0))
+            .variant(move || if size.get() == id { "primary" } else { "" });
+        row.child(b.semantics(move || Semantics::new(Role::Button).label(name.clone()).checked(size.get() == id).action(Action::Click)))
+    });
+    row.semantics(move || Semantics::new(Role::Group).label(l.t("textSize.title")))
 }
 
 /// The compact language picker under the unlock, setup and recovery forms (0.2.0's

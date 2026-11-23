@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-11-22
+
+### Added
+
+- Text size in **Language**: 90%, 100%, 115%, 130% or 150%, for every window at once, saved with your language and font. Your notes are not changed.
+- Linux: SecretSticky for Linux (x86-64), first release. Needs glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13 and later). Install with `tar -xzf SecretSticky-1.0.3-linux-x86_64.tar.gz --strip-components=1 -C ~/.local` (the program, a menu entry and the icon). Notes are kept in `~/.local/share/SecretSticky`. Later updates install from **About → Check for updates**.
+
 ## [1.0.2] — 2026-11-22
 
 ### Fixed

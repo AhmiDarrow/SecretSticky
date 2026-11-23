@@ -170,5 +170,7 @@
   "update.ready": "La actualización {version} está lista para instalarse.",
   "update.upToDate": "Tiene la versión más reciente ({version}).",
   "font.blurb": "Elige la tipografía de todas las ventanas. Tus notas no cambian.",
-  "font.title": "Fuente"
+  "font.title": "Fuente",
+  "textSize.blurb": "Agranda o reduce el texto de todas las ventanas. Tus notas no cambian.",
+  "textSize.title": "Tamaño del texto"
 }

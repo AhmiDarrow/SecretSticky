@@ -170,5 +170,7 @@
   "update.ready": "L’aggiornamento {version} è pronto per l’installazione.",
   "update.upToDate": "Stai usando l’ultima versione ({version}).",
   "font.blurb": "Scegli il carattere di tutte le finestre. Le tue note restano come sono.",
-  "font.title": "Carattere"
+  "font.title": "Carattere",
+  "textSize.blurb": "Ingrandisce o riduce il testo di tutte le finestre. Le tue note restano come sono.",
+  "textSize.title": "Dimensione del testo"
 }
