@@ -10,28 +10,33 @@ const OPEN_ALL: u32 = 3;
 const LOCK: u32 = 4;
 const QUIT: u32 = 9;
 
-/// What hovering the tray icon says.
-pub const TOOLTIP: &str = "SecretSticky — encrypted sticky notes";
-
-/// The tray's menu, top to bottom.
-pub fn menu() -> Vec<TrayItem> {
-    let item = TrayItem::item;
+/// The tray's menu, top to bottom, in `lang`.
+pub fn menu(lang: crate::lang::Lang) -> Vec<TrayItem> {
+    let item = |id, key: &str| TrayItem::item(id, lang.t(key));
     vec![
-        item(NEW_NOTE, "New note"),
+        item(NEW_NOTE, "tray.new"),
         // Bold where the platform shows a default: what clicking the icon does.
-        TrayItem::Item { id: SHOW_MANAGER, label: "Show manager".to_owned(), enabled: true, default: true },
-        item(OPEN_ALL, "Open all notes"),
-        item(LOCK, "Lock vault"),
+        TrayItem::Item { id: SHOW_MANAGER, label: lang.t("tray.show"), enabled: true, default: true },
+        item(OPEN_ALL, "tray.openAll"),
+        item(LOCK, "tray.lock"),
         TrayItem::Separator,
-        item(QUIT, "Quit"),
+        item(QUIT, "tray.quit"),
     ]
+}
+
+/// Shows the tray icon with its tooltip and menu in the current language (again after a
+/// language switch).
+pub fn install_menu(st: &St) {
+    let lang = st.lang;
+    let (tip, items) = remedy_ui::reactive::untrack(|| (lang.t("tray.tooltip"), menu(lang)));
+    if let Some(icon) = crate::brand::tray_icon(32) {
+        st.app.set_tray(Some(TrayIcon::new(tip, icon, items)));
+    }
 }
 
 /// Shows the tray icon and wires its menu.
 pub fn install(st: &St) {
-    if let Some(icon) = crate::brand::tray_icon(32) {
-        st.app.set_tray(Some(TrayIcon::new(TOOLTIP, icon, menu())));
-    }
+    install_menu(st);
     let st = st.clone();
     st.app.clone().on_tray(move |e| {
         let unlocked = st.screen.get_untracked().ok() == Some(state::Screen::Unlocked);

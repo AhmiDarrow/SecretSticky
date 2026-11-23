@@ -11,6 +11,7 @@ use remedy_ui::{App, Window};
 use zeroize::Zeroizing;
 
 use crate::error::{AppError, AppResult};
+use crate::lang::{Lang, Msg};
 use crate::vault::{NoteColor, UnlockThrottle, Vault};
 
 /// What the manager shows.
@@ -36,28 +37,21 @@ pub struct Preview {
     pub color: NoteColor,
 }
 
-impl Preview {
-    /// What the list shows for the title: the title, or "Untitled note".
-    pub fn shown_title(&self) -> String {
-        shown_title(&self.title)
-    }
-}
-
-/// A title as the manager shows it ("Untitled note" when blank).
-pub fn shown_title(title: &str) -> String {
+/// A title as the manager shows it ("Untitled note" when blank), tracked.
+pub fn shown_title(lang: Lang, title: &str) -> String {
     let t = title.trim();
-    if t.is_empty() { "Untitled note".to_owned() } else { t.to_owned() }
+    if t.is_empty() { lang.t("notes.untitled") } else { t.to_owned() }
 }
 
-/// A title as a note window's title bar shows it ("Sticky note" when blank).
-pub fn window_title(title: &str) -> String {
+/// A title as a note window's title bar shows it ("Sticky note" when blank), tracked.
+pub fn window_title(lang: Lang, title: &str) -> String {
     let t = title.trim();
-    if t.is_empty() { "Sticky note".to_owned() } else { t.to_owned() }
+    if t.is_empty() { lang.t("note.windowTitle") } else { t.to_owned() }
 }
 
-/// A color's name, as the pickers say it.
-pub fn color_name(c: &NoteColor) -> &'static str {
-    COLORS.iter().find(|(k, _)| k == c).map_or("Yellow", |(_, n)| n)
+/// A color's name, as the pickers say it, tracked.
+pub fn color_name(lang: Lang, c: &NoteColor) -> String {
+    lang.t(COLORS.iter().find(|(k, _)| k == c).map_or("color.yellow", |(_, key)| key))
 }
 
 /// An open note window.
@@ -71,7 +65,12 @@ pub struct OpenNote {
 pub struct Sticky {
     pub app: App,
     vault: Option<Arc<Mutex<Vault>>>,
+    /// Why the vault could not be opened (the vault's own message).
     pub load_error: String,
+    /// The interface language.
+    pub lang: Lang,
+    /// Where `vault.json` and `settings.json` live.
+    pub data_dir: std::path::PathBuf,
     pub throttle: RefCell<UnlockThrottle>,
     pub screen: Signal<Screen>,
     pub notes: Signal<Vec<Preview>>,
@@ -79,7 +78,7 @@ pub struct Sticky {
     pub has_recovery: Signal<bool>,
     pub busy: Signal<bool>,
     /// The last error worth showing in the manager.
-    pub error: Signal<Option<String>>,
+    pub error: Signal<Option<Msg>>,
     pub recovery_key: RefCell<Option<Zeroizing<String>>>,
     pub manager: RefCell<Option<Window>>,
     pub open: RefCell<HashMap<String, OpenNote>>,
@@ -89,15 +88,16 @@ pub struct Sticky {
 pub type St = Rc<Sticky>;
 
 /// Every note color, in the order the pickers show them.
+/// Every note color with its catalog key, in the order the pickers show them.
 pub const COLORS: [(NoteColor, &str); 8] = [
-    (NoteColor::Yellow, "Yellow"),
-    (NoteColor::Green, "Green"),
-    (NoteColor::Pink, "Pink"),
-    (NoteColor::Blue, "Blue"),
-    (NoteColor::Purple, "Purple"),
-    (NoteColor::Gray, "Gray"),
-    (NoteColor::Black, "Black"),
-    (NoteColor::DarkGreen, "Dark green"),
+    (NoteColor::Yellow, "color.yellow"),
+    (NoteColor::Green, "color.green"),
+    (NoteColor::Pink, "color.pink"),
+    (NoteColor::Blue, "color.blue"),
+    (NoteColor::Purple, "color.purple"),
+    (NoteColor::Gray, "color.gray"),
+    (NoteColor::Black, "color.black"),
+    (NoteColor::DarkGreen, "color.darkgreen"),
 ];
 
 /// A note color as an engine color.
@@ -140,6 +140,37 @@ pub fn vault_override() -> Option<std::path::PathBuf> {
     std::env::var_os("SECRETSTICKY_VAULT").map(Into::into)
 }
 
+/// `--home <dir>` or `SECRETSTICKY_HOME`: the folder that holds the vault and settings
+/// (SecretSticky 0.2.0's portable mode).
+pub fn home_override() -> Option<std::path::PathBuf> {
+    let args: Vec<String> = std::env::args().collect();
+    crate::vault::home_override_from(&args, std::env::var("SECRETSTICKY_HOME").ok().as_deref())
+}
+
+/// The folder for `settings.json` when no vault could be opened: the vault's folder as
+/// `Vault::open_default` resolves it.
+fn fallback_data_dir(vault_path: Option<&std::path::Path>) -> std::path::PathBuf {
+    if let Some(dir) = vault_path.and_then(std::path::Path::parent) {
+        return dir.to_owned();
+    }
+    home_override()
+        .or_else(|| dirs::data_dir().map(|d| d.join("SecretSticky")))
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
+/// Switches the interface language: saved to `settings.json` (the vault is not touched),
+/// then every window, the tray and the engine's own words follow.
+pub fn set_language(st: &St, id: &str) {
+    match secretsticky_shipped_i18n::set_lang(&st.data_dir, id) {
+        Ok(saved) => {
+            st.app.set_locale(Some(saved.clone()));
+            st.lang.0.set_if_changed(saved);
+            crate::tray::install_menu(st);
+        }
+        Err(e) => st.error.set(Some(Msg::Error(e))),
+    }
+}
+
 /// Builds the app on the default vault, or the one `SECRETSTICKY_VAULT` names.
 pub fn start(app: &App) {
     start_at(app, vault_override());
@@ -147,18 +178,26 @@ pub fn start(app: &App) {
 
 /// Builds the app: state, tray, manager window, second-launch and idle handling.
 pub fn start_at(app: &App, vault_path: Option<std::path::PathBuf>) -> St {
-    let opened = match vault_path {
-        Some(p) => Vault::open_path(p),
+    let opened = match &vault_path {
+        Some(p) => Vault::open_path(p.clone()),
         None => Vault::open_default(),
     };
-    let (vault, load_error) = match opened {
-        Ok(v) => (Some(Arc::new(Mutex::new(v))), String::new()),
-        Err(e) => (None, format!("The vault could not be opened: {e}")),
+    let (vault, load_error, data_dir) = match opened {
+        Ok(v) => {
+            let dir = v.data_dir();
+            (Some(Arc::new(Mutex::new(v))), String::new(), dir)
+        }
+        Err(e) => (None, e.to_string(), fallback_data_dir(vault_path.as_deref())),
     };
+    // The saved language, or the system's on first run (written to settings.json).
+    let lang = secretsticky_shipped_i18n::load_or_init_lang(&data_dir);
+    app.set_locale(Some(lang.clone()));
     let st: St = Rc::new(Sticky {
         app: app.clone(),
         vault,
         load_error,
+        lang: Lang(Signal::new(lang)),
+        data_dir,
         throttle: RefCell::new(UnlockThrottle::new()),
         screen: Signal::new(Screen::Unlock),
         notes: Signal::new(Vec::new()),
@@ -244,7 +283,7 @@ pub fn checked<T>(st: &St, r: AppResult<T>) -> Option<T> {
             None
         }
         Err(e) => {
-            st.error.set(Some(e.to_string()));
+            st.error.set(Some(e.into()));
             None
         }
     }

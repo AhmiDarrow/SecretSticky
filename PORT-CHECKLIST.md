@@ -1,6 +1,6 @@
 # SecretSticky → RemedyUI port checklist
 
-The shipped app is the Tauri + React 0.1.8 release (`src/`, `src-tauri/`). The RemedyUI build
+The shipped app is the Tauri + React 0.2.0 release (`src/`, `src-tauri/`). The RemedyUI build
 is `remedyui/`. It runs the shipped vault, crypto and error code unchanged (`#[path]` modules
 from `src-tauri/src`). Each line below was checked against the shipped source. The proof is
 either a headless test in `remedyui/src/flow_tests.rs` (driven through the accessibility tree)
@@ -11,7 +11,7 @@ or the screenshots in `port-evidence/` (`before/` is the shipped UI, `after/` is
 - [x] Same vault file, same place: `%APPDATA%\SecretSticky\vault.json` (`Vault::open_default`, unchanged code).
 - [x] Same format. The vault code is the shipped `src-tauri/src/vault.rs`, so there is no migration.
 - [x] `SECRETSTICKY_VAULT` selects another vault file. It also gets its own single-instance lock (`main.rs`).
-- [x] Vaults written by 0.1.0 and 0.1.8 open, can be edited, and read back without loss through the shipped code (`shipped_vaults_open_edit_and_reopen_without_loss`; fixtures from `compat/shipped.sh`, which runs the release tags' own vault code).
+- [x] Vaults written by 0.1.0, 0.1.8 and 0.2.0 open, can be edited, and read back without loss through the shipped code (`shipped_vaults_open_edit_and_reopen_without_loss`; fixtures from `compat/shipped.sh`, which runs the release tags' own vault code).
 - [x] `.bak` and crash recovery come from the shipped `open_path`, unchanged.
 - [x] Untouched notes keep their saved geometry. Opening a note does not count as moving it.
 
@@ -66,11 +66,21 @@ or the screenshots in `port-evidence/` (`before/` is the shipped UI, `after/` is
 - [x] Accessibility: every control is named and reachable, and the engine's audit is clean on every manager screen and on note windows (focus rings, 24 px targets, no clipping).
 - [x] Keyboard: Enter submits each form, Tab order, Escape closes dialogs.
 
+## Languages (0.2.0)
+
+- [x] The shipped catalogs (`src/locales/*.json`) and `src-tauri/src/i18n.rs`, compiled unchanged (`remedyui/shipped-i18n`, edition 2021).
+- [x] First run follows the system language; the choice is kept in `settings.json` beside the vault, unknown keys kept, the vault never written (`language_switches_everything_at_once_and_leaves_the_vault_alone`).
+- [x] Language panel (header button) with all eleven languages; a compact picker on setup, unlock and recovery.
+- [x] A switch redraws every window, note titles, the tray menu and tooltip, and the engine's own words at once.
+- [x] Plurals (`manager.count.*`, `duration.*`) by CLDR rules; decimal comma where the language uses one.
+- [x] Vault errors localized as the shipped `localizeMessage`; the recovery text keeps its bold `<strong>` run.
+- [x] Long words wrap (header, links, presets, footer), CJK on the system's faces after Inter.
+- [x] `--home <dir>` / `SECRETSTICKY_HOME` (0.2.0's vault folder override), with its own single-instance lock.
+
 ## Not carried over (with reason)
 
 - Boot "Loading SecretSticky…" screen: the native app opens the vault before the first frame, so there is no loading phase.
 - The "Vault locked / Unlock" placeholder in note windows: both builds close note windows on lock, so the placeholder could only flash for a moment in the webview build.
-- Localization: the shipped app is English only. The port keeps English.
 
 ## Targets
 

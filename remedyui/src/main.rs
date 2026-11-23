@@ -18,6 +18,7 @@ mod vault;
 
 mod brand;
 mod fonts;
+mod lang;
 mod manager;
 mod note;
 mod state;
@@ -30,7 +31,7 @@ mod flow_tests;
 
 fn main() {
     // Another vault is another app: its own single-instance lock and window geometry.
-    let name = if state::vault_override().is_some() { "SecretSticky (other vault)" } else { "SecretSticky" };
+    let name = if state::vault_override().is_some() || state::home_override().is_some() { "SecretSticky (other vault)" } else { "SecretSticky" };
     let config = fonts::with_inter(remedy_ui::AppConfig::new(name).single_instance().theme(theme::theme(), theme::sheet));
     if let Err(e) = remedy_ui::run(config, |app| {
         state::start(app);

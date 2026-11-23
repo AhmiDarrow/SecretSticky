@@ -1,6 +1,6 @@
 [package]
 name = "secretsticky"
-version = "0.2.0-alpha.1"
+version = "0.3.0"
 description = "Encrypted sticky notes, on RemedyUI"
 edition = "2024"
 rust-version = "1.96"
@@ -23,6 +23,8 @@ remedy-ui-services-update = { path = "../../Projects/RemedyUI/crates/remedy-ui-s
 remedy-ui-paint = { path = "../../Projects/RemedyUI/crates/remedy-ui-paint" }
 remedy-ui-a11y = { path = "../../Projects/RemedyUI/crates/remedy-ui-a11y" }
 remedy-ui-media-image = { path = "../../Projects/RemedyUI/crates/remedy-ui-media-image" }
+# The shipped language catalogs and settings.json code (edition 2021, compiled unchanged).
+secretsticky-shipped-i18n = { path = "shipped-i18n" }
 # The vault, shared with the Tauri app (same versions as its lockfile).
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"

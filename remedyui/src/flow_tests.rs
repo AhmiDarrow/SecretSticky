@@ -18,6 +18,20 @@ use crate::state::{Screen, St};
 const PW: &str = "correct horse battery staple";
 const COPY: &str = "Copy selection or full body (auto-clears in 30s)";
 
+/// Tests drive the English interface whatever the machine's language: a `settings.json`
+/// beside `vault` that says so (unless the test wrote its own).
+fn english(vault: &std::path::Path) {
+    let settings = vault.with_file_name("settings.json");
+    if !settings.exists() {
+        std::fs::write(settings, r#"{"lang":"en"}"#).expect("settings.json");
+    }
+}
+
+/// The manager's current error, in the interface language.
+fn error_text(d: &Driver) -> Option<String> {
+    d.st.error.get_untracked().ok().flatten().map(|m| remedy_ui::reactive::untrack(|| m.text(d.st.lang)))
+}
+
 struct Driver {
     host: HeadlessHost,
     runner: Runner,
@@ -29,12 +43,17 @@ struct Driver {
 impl Driver {
     /// Starts the app on `vault` and reads its first frames.
     fn new(vault: std::path::PathBuf) -> Self {
+        english(&vault);
         Self::start(move |app| crate::state::start_at(app, Some(vault)))
     }
 
     /// Starts the app as `main` does: on `SECRETSTICKY_VAULT` (tests always set it).
     fn from_env() -> Self {
-        assert!(crate::state::vault_override().is_some(), "tests never open the person's own vault");
+        let vault = crate::state::vault_override();
+        assert!(vault.is_some(), "tests never open the person's own vault");
+        if let Some(v) = &vault {
+            english(v);
+        }
         Self::start(|app| crate::state::start_at(app, crate::state::vault_override()))
     }
 
@@ -226,18 +245,18 @@ fn set_up_write_a_note_lock_and_unlock_again() {
     d.assert_labelled(manager);
     d.assert_accessible(&d.manager_ui());
     assert!(d.host.window(manager).is_some_and(|w| w.options().capture_protected), "manager hidden from capture");
-    assert!(d.host.tray().is_some_and(|t| t.tooltip == crate::tray::TOOLTIP), "tray icon shown");
-    assert_eq!(d.host.tray().map(|t| t.menu.clone()), Some(crate::tray::menu()), "the shipped tray menu");
+    assert!(d.host.tray().is_some_and(|t| t.tooltip == "SecretSticky — encrypted sticky notes"), "tray icon shown");
+    assert_eq!(d.host.tray().map(|t| t.menu.clone()), Some(remedy_ui::reactive::untrack(|| crate::tray::menu(d.st.lang))), "the shipped tray menu");
 
     // Setup refuses short and mismatched passwords.
     d.type_into(manager, "Master password", "short");
     d.type_into(manager, "Confirm password", "short");
     d.click(manager, "Create vault");
-    assert_eq!(d.st.error.get_untracked().ok().flatten().as_deref(), Some("Use at least 12 characters"));
+    assert_eq!(error_text(&d).as_deref(), Some("Use at least 12 characters"));
     d.type_into(manager, "Master password", PW);
     d.type_into(manager, "Confirm password", "something else entirely");
     d.click(manager, "Create vault");
-    assert_eq!(d.st.error.get_untracked().ok().flatten().as_deref(), Some("Passwords do not match"));
+    assert_eq!(error_text(&d).as_deref(), Some("Passwords do not match"));
     d.type_into(manager, "Master password", PW);
     d.type_into(manager, "Confirm password", PW);
     d.click(manager, "Create vault");
@@ -351,8 +370,9 @@ fn every_manager_action() {
     // About: version, links, updates.
     d.click(manager, "About");
     assert!(d.has(manager, &format!("Version {}", env!("CARGO_PKG_VERSION"))));
-    for (label, url) in crate::manager::LINKS {
-        d.click(manager, label);
+    for (key, url) in crate::manager::LINKS {
+        let label = secretsticky_shipped_i18n::t("en", key);
+        d.click(manager, &label);
         assert!(d.host.opened_urls().iter().any(|u| u == url), "{label} opens {url}");
     }
     assert!(d.has(manager, "Check for updates"));
@@ -362,14 +382,15 @@ fn every_manager_action() {
 
     // Auto-lock: ten presets; the vault keeps the choice.
     d.click(manager, "Auto-lock");
-    assert!(d.has(manager, "Auto-lock now 15 min"));
-    for (_, label) in crate::manager::AUTO_LOCK {
-        assert!(d.has(manager, label), "preset {label}");
+    assert!(d.has(manager, "Auto-lock after 15 min of inactivity"));
+    for secs in crate::manager::AUTO_LOCK {
+        let label = remedy_ui::reactive::untrack(|| d.st.lang.duration(secs));
+        assert!(d.has(manager, &label), "preset {label}");
     }
     d.assert_accessible(&d.manager_ui());
-    d.click(manager, "2 hr");
+    d.click(manager, "2 hrs");
     assert_eq!(d.st.with(|v| Ok(v.status().idle_lock_secs)).ok(), Some(7200));
-    assert!(d.has(manager, "Auto-lock now 2 hrs"));
+    assert!(d.has(manager, "Auto-lock after 2 hrs of inactivity"));
     d.click(manager, "Off");
     assert_eq!(d.st.with(|v| Ok(v.status().idle_lock_secs)).ok(), Some(0));
     d.click(manager, "Done");
@@ -387,7 +408,7 @@ fn every_manager_action() {
     d.type_into(manager, "New password", new_pw);
     d.type_into(manager, "Confirm new password", new_pw);
     d.click(manager, "Update password");
-    d.until("the change", |d| d.has(manager, crate::manager::PASSWORD_CHANGED));
+    d.until("the change", |d| d.has(manager, "Password updated. Recovery key is unchanged."));
 
     // Notes: create two, delete one through the confirmation.
     let before = d.windows();
@@ -402,11 +423,11 @@ fn every_manager_action() {
     assert!(d.has(manager, "2 notes · local vault"));
     let pink = d.st.notes.get_untracked().expect("notes").into_iter().find(|p| p.color == crate::vault::NoteColor::Pink);
     let pink = pink.expect("the pink note");
-    d.click(manager, &format!("Delete {}", pink.shown_title()));
+    d.click(manager, &format!("Delete {}", pink.title.trim()));
     assert!(d.has(manager, "Delete note?"));
     d.click(manager, "Cancel");
     assert_eq!(Some(d.st.notes.with(Vec::len)), Some(2), "cancel keeps it");
-    d.click(manager, &format!("Delete {}", pink.shown_title()));
+    d.click(manager, &format!("Delete {}", pink.title.trim()));
     d.click(manager, "Delete");
     assert_eq!(Some(d.st.notes.with(Vec::len)), Some(1), "deleted");
     assert!(d.st.with(|v| v.get_note(&pink.id)).is_err());
@@ -428,14 +449,15 @@ fn every_manager_action() {
     assert!(d.host.has_exited(), "quit");
 }
 
-/// Vaults written by shipped releases (0.1.0, the first, and 0.1.8, the last Tauri release)
+/// Vaults written by shipped releases (0.1.0, the first; 0.1.8; and 0.2.0, the last Tauri
+/// release, with its `settings.json`)
 /// open in this build through `SECRETSTICKY_VAULT`, show every note as it was, take edits,
 /// and read back afterwards through the shipped vault code with nothing lost. The fixtures
 /// and their expected contents were made by `compat/shipped.sh` with the release tags' own
 /// vault code.
 #[test]
 fn shipped_vaults_open_edit_and_reopen_without_loss() {
-    for (tag, pw) in [("v0.1.0", "old-pass9"), ("v0.1.8", PW)] {
+    for (tag, pw) in [("v0.1.0", "old-pass9"), ("v0.1.8", PW), ("v0.2.0", PW)] {
         shipped_vault_round_trip(tag, pw);
     }
 }
@@ -445,6 +467,11 @@ fn shipped_vault_round_trip(tag: &str, pw: &str) {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("vault.json");
     std::fs::copy(fixtures.join(format!("vault-{tag}.json")), &path).expect("copy the fixture");
+    // 0.2.0 keeps the language in settings.json beside the vault, keys it does not know kept.
+    let settings = path.with_file_name("settings.json");
+    if tag == "v0.2.0" {
+        std::fs::write(&settings, r#"{"lang":"en","fromAnotherVersion":true}"#).expect("settings");
+    }
     let recovery = std::fs::read_to_string(fixtures.join(format!("{tag}.recovery"))).expect("recovery key");
     let expected: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(fixtures.join(format!("vault-{tag}.expected.json"))).expect("expected"))
@@ -466,7 +493,7 @@ fn shipped_vault_round_trip(tag: &str, pw: &str) {
     d.frames(2);
     assert_eq!(d.st.idle_secs.get_untracked().ok(), Some(3600), "{tag}: auto-lock setting kept");
     for n in &notes_want {
-        let title = crate::state::shown_title(n["title"].as_str().unwrap_or_default());
+        let title = crate::state::shown_title(d.st.lang, n["title"].as_str().unwrap_or_default());
         assert!(d.has(manager, &format!("Open {title}")), "{tag}: {title} listed");
     }
 
@@ -479,7 +506,7 @@ fn shipped_vault_round_trip(tag: &str, pw: &str) {
         let (title, pinned) = d.host.window(*w).map(|h| (h.options().title.clone(), h.options().always_on_top)).expect("w");
         let n = notes_want
             .iter()
-            .find(|n| crate::state::window_title(n["title"].as_str().unwrap_or_default()) == title)
+            .find(|n| crate::state::window_title(d.st.lang, n["title"].as_str().unwrap_or_default()) == title)
             .unwrap_or_else(|| panic!("{tag}: a note titled {title}"));
         assert_eq!(pinned, n["always_on_top"].as_bool().unwrap_or(false), "{tag}: {title} pin");
         let body = d.value(*w, "Note").unwrap_or_default();
@@ -508,7 +535,7 @@ fn shipped_vault_round_trip(tag: &str, pw: &str) {
     d.frames(2);
     d.show_manager();
     d.click(manager, "Auto-lock");
-    d.click(manager, "2 hr");
+    d.click(manager, "2 hrs");
     d.click(manager, "Done");
     let new_pw = "the new master password 2026";
     d.click(manager, "Password");
@@ -516,7 +543,7 @@ fn shipped_vault_round_trip(tag: &str, pw: &str) {
     d.type_into(manager, "New password", new_pw);
     d.type_into(manager, "Confirm new password", new_pw);
     d.click(manager, "Update password");
-    d.until("the change", |d| d.has(manager, crate::manager::PASSWORD_CHANGED));
+    d.until("the change", |d| d.has(manager, "Password updated. Recovery key is unchanged."));
     d.click(manager, "Lock");
     assert_eq!(d.screen(), Screen::Unlock);
     drop(d);
@@ -554,6 +581,12 @@ fn shipped_vault_round_trip(tag: &str, pw: &str) {
             }
         }
         v.lock();
+    }
+    if tag == "v0.2.0" {
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings).expect("settings kept")).expect("settings json");
+        assert_eq!(after["lang"], "en", "{tag}: language kept");
+        assert_eq!(after["fromAnotherVersion"], true, "{tag}: unknown settings kept");
     }
     // For a cross-check with a release's own vault code (`compat/shipped.sh <tag> dump`).
     if let Some(out) = std::env::var_os("SECRETSTICKY_COMPAT_OUT") {
@@ -704,4 +737,76 @@ fn screenshots() {
     shot(&mut d, manager, "03-unlock-wrong-password", None);
     d.click(manager, "Use recovery key");
     shot(&mut d, manager, "03-unlock-recovery-key", None);
+    // 0.2.0's languages: long German words and Japanese on the system's CJK faces.
+    d.click(manager, "Use master password");
+    d.type_into(manager, "Master password", PW);
+    d.click(manager, "Unlock");
+    d.until("unlock", |d| d.screen() == Screen::Unlocked);
+    d.frames(3);
+    for id in ["de", "ja"] {
+        crate::state::set_language(&d.st, id);
+        d.frames(3);
+        shot(&mut d, manager, &format!("12-manager-{id}"), None);
+    }
+    d.click(manager, &secretsticky_shipped_i18n::t("ja", "manager.language"));
+    d.frames(3);
+    shot(&mut d, manager, "12-language-panel-ja", None);
+    crate::state::set_language(&d.st, "de");
+    d.frames(3);
+    d.click(manager, &secretsticky_shipped_i18n::t("de", "manager.lock"));
+    d.frames(3);
+    shot(&mut d, manager, "12-unlock-de", None);
+}
+
+/// 0.2.0's languages: the Language panel switches every window, the tray and the unlock
+/// screen at once; the choice goes to settings.json and the vault file is not touched.
+#[test]
+fn language_switches_everything_at_once_and_leaves_the_vault_alone() {
+    let t = |lang: &str, key: &str| secretsticky_shipped_i18n::t(lang, key);
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("vault.json");
+    let mut d = Driver::new(path.clone());
+    let manager = d.windows()[0];
+    d.type_into(manager, "Master password", PW);
+    d.type_into(manager, "Confirm password", PW);
+    d.click(manager, "Create vault");
+    d.until("the recovery key", |d| d.screen() == Screen::Recovery);
+    d.frames(2);
+    d.click(manager, "I already saved it — continue");
+    d.frames(2);
+    d.click(manager, "New yellow note");
+    let note = d.note_window("Sticky note");
+    d.show_manager();
+    let vault_before = std::fs::read(&path).expect("vault");
+
+    d.click(manager, "Language");
+    assert!(d.has(manager, "Deutsch") && d.has(manager, "日本語"), "every shipped language offered");
+    d.click(manager, "Deutsch");
+    d.frames(2);
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("settings.json")).expect("settings")).expect("json");
+    assert_eq!(saved["lang"], "de");
+    assert_eq!(std::fs::read(&path).expect("vault"), vault_before, "switching language never writes the vault");
+    for key in ["manager.lock", "manager.openAll", "notes.hide", "language.title"] {
+        assert!(d.has(manager, &t("de", key)), "manager shows {key} in German");
+    }
+    assert!(d.has(manager, &t("de", "manager.count.one").replace("{count}", "1")), "plural count in German");
+    let tray = d.host.tray().expect("tray");
+    assert_eq!(tray.tooltip, t("de", "tray.tooltip"));
+    assert_eq!(tray.menu[0].label(), t("de", "tray.new"));
+    assert_eq!(d.host.window(note).map(|w| w.options().title.clone()), Some(t("de", "note.windowTitle")), "blank note title");
+    assert!(d.has(note, &t("de", "note.lockVault")), "note toolbar in German");
+    d.assert_accessible(&d.manager_ui());
+
+    // Locked, the unlock screen is German too (with its picker), and a switch back to
+    // English (what the picker calls) reaches it at once.
+    d.click(manager, &t("de", "manager.lock"));
+    assert_eq!(d.screen(), Screen::Unlock);
+    assert!(d.has(manager, &t("de", "unlock.titleUnlock")));
+    assert!(d.has(manager, &t("de", "language.aria")), "the unlock screen's language picker");
+    crate::state::set_language(&d.st, "en");
+    d.frames(2);
+    assert!(d.has(manager, "Unlock SecretSticky"), "back to English");
+    assert_eq!(d.host.tray().map(|t| t.tooltip.clone()).as_deref(), Some("SecretSticky — encrypted sticky notes"));
+    assert_eq!(std::fs::read(&path).expect("vault"), vault_before, "the vault is as it was");
 }
