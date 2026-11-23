@@ -168,5 +168,7 @@
   "update.downloading": "Download dell’aggiornamento…",
   "update.downloadingPct": "Download dell’aggiornamento… {pct}%",
   "update.ready": "L’aggiornamento {version} è pronto per l’installazione.",
-  "update.upToDate": "Stai usando l’ultima versione ({version})."
+  "update.upToDate": "Stai usando l’ultima versione ({version}).",
+  "font.blurb": "Scegli il carattere di tutte le finestre. Le tue note restano come sono.",
+  "font.title": "Carattere"
 }

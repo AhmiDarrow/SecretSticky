@@ -168,5 +168,7 @@
   "update.downloading": "Загрузка обновления…",
   "update.downloadingPct": "Загрузка обновления… {pct}%",
   "update.ready": "Обновление {version} готово к установке.",
-  "update.upToDate": "У вас последняя версия ({version})."
+  "update.upToDate": "У вас последняя версия ({version}).",
+  "font.blurb": "Выберите шрифт для всех окон. Ваши заметки останутся без изменений.",
+  "font.title": "Шрифт"
 }

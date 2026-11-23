@@ -168,5 +168,7 @@
   "update.downloading": "Téléchargement de la mise à jour…",
   "update.downloadingPct": "Téléchargement de la mise à jour… {pct} %",
   "update.ready": "La mise à jour {version} est prête à être installée.",
-  "update.upToDate": "Vous avez la dernière version ({version})."
+  "update.upToDate": "Vous avez la dernière version ({version}).",
+  "font.blurb": "Choisissez la police de toutes les fenêtres. Vos notes restent inchangées.",
+  "font.title": "Police"
 }

@@ -27,16 +27,27 @@ pub const BRAND: Palette = Palette {
 /// Text on the amber accent: the shipped `--accent-text`.
 const ON_ACCENT: &str = "#1a1b1e";
 
-/// The SecretSticky theme.
+/// The SecretSticky theme, in the shipped typeface.
 pub fn theme() -> Theme {
+    theme_with(crate::fonts::FAMILY)
+}
+
+/// The SecretSticky theme with `family` (one of [`crate::fonts::CHOICES`]) for every text,
+/// headings included.
+pub fn theme_with(family: &str) -> Theme {
     let mut t = remedy_ui_themes::theme(&BRAND);
-    // The shipped typeface first (`font-family: "Inter", system-ui, …` in `src/App.css`); the
-    // files come with `fonts::with_inter`.
-    t.font_families.insert(0, crate::fonts::FAMILY.to_owned());
-    // 0.2.0's stack after Inter: the system faces that carry Japanese, Korean and Chinese.
-    for (i, f) in CJK_FALLBACK.iter().enumerate() {
-        t.font_families.insert(1 + i, (*f).to_owned());
+    // The chosen typeface first; by default the shipped one (`font-family: "Inter", system-ui,
+    // …` in `src/App.css`). The files come with `fonts::with_inter`.
+    let mut stack = vec![family.to_owned()];
+    // Inter next, for any character the chosen face does not draw.
+    if family != crate::fonts::FAMILY {
+        stack.push(crate::fonts::FAMILY.to_owned());
     }
+    // 0.2.0's stack after Inter: the system faces that carry Japanese, Korean and Chinese.
+    stack.extend(CJK_FALLBACK.iter().map(|f| (*f).to_owned()));
+    t.font_families.splice(0..0, stack);
+    // Headings follow the choice too, as the shipped headings inherited the page's font.
+    t.heading_families.clear();
     if let Ok(c) = Color::from_hex(ON_ACCENT) {
         t.colors.on_accent = c;
     }

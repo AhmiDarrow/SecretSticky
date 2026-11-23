@@ -168,5 +168,7 @@
   "update.downloading": "更新をダウンロードしています…",
   "update.downloadingPct": "更新をダウンロードしています… {pct}%",
   "update.ready": "更新 {version} をインストールできます。",
-  "update.upToDate": "最新バージョンです（{version}）。"
+  "update.upToDate": "最新バージョンです（{version}）。",
+  "font.blurb": "すべてのウィンドウの書体を選びます。メモの内容は変わりません。",
+  "font.title": "フォント"
 }
