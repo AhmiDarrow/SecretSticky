@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-11-22
+
+### Fixed
+
+- The X on a note closes it again. In 1.0.1 the note stayed on screen, frozen; your text was saved, but the window would not go away.
+
 ## [1.0.1] — 2026-11-22
 
 ### Fixed
