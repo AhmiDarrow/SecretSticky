@@ -1,6 +1,6 @@
 {
   "about.aria": "Über SecretSticky",
-  "about.blurb": "Verschlüsselte Haftnotizen nur auf diesem PC, für Windows. MIT-Lizenz.",
+  "about.blurb": "Verschlüsselte Haftnotizen nur auf diesem PC, für Windows und Linux, gebaut mit RemedyUI. MIT-Lizenz.",
   "about.checkUpdates": "Nach Updates suchen",
   "about.checking": "Wird geprüft…",
   "about.githubProfile": "GitHub-Profil",
@@ -78,7 +78,7 @@
   "error.window": "Das Fenster konnte nicht geöffnet werden. {detail}",
   "error.windowIcon": "Das Fenstersymbol konnte nicht gesetzt werden. {detail}",
   "language.aria": "Sprache",
-  "language.blurb": "Beim ersten Start folgt SecretSticky der Windows-Sprache. Wählen Sie eine Sprache, um sofort zu wechseln. Notizen, Passwort und Auto-Sperre bleiben unverändert.",
+  "language.blurb": "Beim ersten Start folgt SecretSticky der Sprache des Systems. Wählen Sie eine Sprache, um sofort zu wechseln. Notizen, Passwort und Auto-Sperre bleiben unverändert.",
   "language.current": "Aktuelle Sprache",
   "language.title": "Sprache",
   "manager.about": "Info",

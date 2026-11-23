@@ -1,6 +1,6 @@
 {
   "about.aria": "À propos de SecretSticky",
-  "about.blurb": "Pense-bêtes chiffrés, uniquement sur cet ordinateur, pour Windows. Licence MIT.",
+  "about.blurb": "Pense-bêtes chiffrés, uniquement sur cet ordinateur, pour Windows et Linux, conçus avec RemedyUI. Licence MIT.",
   "about.checkUpdates": "Rechercher des mises à jour",
   "about.checking": "Vérification…",
   "about.githubProfile": "Profil GitHub",
@@ -78,7 +78,7 @@
   "error.window": "Impossible d’ouvrir la fenêtre. {detail}",
   "error.windowIcon": "Impossible de définir l’icône de la fenêtre. {detail}",
   "language.aria": "Langue",
-  "language.blurb": "Au premier lancement, SecretSticky suit la langue de Windows. Choisissez une langue pour changer tout de suite. Vos notes, votre mot de passe et le verrouillage automatique restent inchangés.",
+  "language.blurb": "Au premier lancement, SecretSticky suit la langue du système. Choisissez une langue pour changer tout de suite. Vos notes, votre mot de passe et le verrouillage automatique restent inchangés.",
   "language.current": "Langue actuelle",
   "language.title": "Langue",
   "manager.about": "À propos",

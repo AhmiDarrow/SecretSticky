@@ -1,6 +1,6 @@
 {
   "about.aria": "About SecretSticky",
-  "about.blurb": "Local-only encrypted sticky notes for Windows. MIT licensed.",
+  "about.blurb": "Local-only encrypted sticky notes for Windows and Linux, built with RemedyUI. MIT licensed.",
   "about.checkUpdates": "Check for updates",
   "about.checking": "Checking…",
   "about.githubProfile": "GitHub profile",
@@ -78,7 +78,7 @@
   "error.window": "Could not open the window. {detail}",
   "error.windowIcon": "Could not set the window icon. {detail}",
   "language.aria": "Language",
-  "language.blurb": "SecretSticky follows your Windows language the first time it opens. Pick a language to switch right away. Your notes, password, and auto-lock stay as they are.",
+  "language.blurb": "SecretSticky follows your system's language the first time it opens. Pick a language to switch right away. Your notes, password, and auto-lock stay as they are.",
   "language.current": "Current language",
   "language.title": "Language",
   "manager.about": "About",
