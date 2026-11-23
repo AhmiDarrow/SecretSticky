@@ -71,6 +71,8 @@ pub struct Sticky {
     pub lang: Lang,
     /// The chosen font's id ([`crate::fonts::CHOICES`]).
     pub font: Signal<String>,
+    /// The chosen text size's id ([`crate::settings::TEXT_SIZES`]).
+    pub text_size: Signal<String>,
     /// Where `vault.json` and `settings.json` live.
     pub data_dir: std::path::PathBuf,
     pub throttle: RefCell<UnlockThrottle>,
@@ -177,11 +179,28 @@ pub fn set_language(st: &St, id: &str) {
 pub fn set_font(st: &St, id: &str) {
     match crate::settings::save_font(&st.data_dir, id) {
         Ok(()) => {
-            st.app.set_theme(crate::theme::theme_with(crate::fonts::family(id)));
             st.font.set_if_changed(id.to_owned());
+            restyle(st);
         }
         Err(e) => st.error.set(Some(Msg::Error(e))),
     }
+}
+
+/// Saves `id` as the text size and resizes every window's text at once.
+pub fn set_text_size(st: &St, id: &str) {
+    match crate::settings::save_text_size(&st.data_dir, id) {
+        Ok(()) => {
+            st.text_size.set_if_changed(id.to_owned());
+            restyle(st);
+        }
+        Err(e) => st.error.set(Some(Msg::Error(e))),
+    }
+}
+
+/// Every window in the chosen font at the chosen size.
+fn restyle(st: &St) {
+    let (font, size) = remedy_ui::reactive::untrack(|| (st.font.get(), st.text_size.get()));
+    st.app.set_theme(crate::theme::theme_with(crate::fonts::family(&font), crate::settings::text_scale(&size)));
 }
 
 /// Builds the app on the default vault, or the one `SECRETSTICKY_VAULT` names.
@@ -205,10 +224,11 @@ pub fn start_at(app: &App, vault_path: Option<std::path::PathBuf>) -> St {
     // The saved language, or the system's on first run (written to settings.json).
     let lang = secretsticky_shipped_i18n::load_or_init_lang(&data_dir);
     app.set_locale(Some(lang.clone()));
-    // The saved font, if not the shipped one, restyles every window.
+    // The saved font and text size, where not the shipped ones, restyle every window.
     let font = crate::settings::load_font(&data_dir);
-    if font != crate::fonts::CHOICES[0].0 {
-        app.set_theme(crate::theme::theme_with(crate::fonts::family(&font)));
+    let text_size = crate::settings::load_text_size(&data_dir);
+    if font != crate::fonts::CHOICES[0].0 || text_size != "100" {
+        app.set_theme(crate::theme::theme_with(crate::fonts::family(&font), crate::settings::text_scale(&text_size)));
     }
     let st: St = Rc::new(Sticky {
         app: app.clone(),
@@ -216,6 +236,7 @@ pub fn start_at(app: &App, vault_path: Option<std::path::PathBuf>) -> St {
         load_error,
         lang: Lang(Signal::new(lang)),
         font: Signal::new(font),
+        text_size: Signal::new(text_size),
         data_dir,
         throttle: RefCell::new(UnlockThrottle::new()),
         screen: Signal::new(Screen::Unlock),
