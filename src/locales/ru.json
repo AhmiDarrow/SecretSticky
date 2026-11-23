@@ -1,6 +1,6 @@
 {
   "about.aria": "О SecretSticky",
-  "about.blurb": "Зашифрованные стикеры только на этом компьютере, для Windows. Лицензия MIT.",
+  "about.blurb": "Зашифрованные стикеры только на этом компьютере, для Windows и Linux, созданы на RemedyUI. Лицензия MIT.",
   "about.checkUpdates": "Проверить обновления",
   "about.checking": "Проверка…",
   "about.githubProfile": "Профиль GitHub",
@@ -78,7 +78,7 @@
   "error.window": "Не удалось открыть окно. {detail}",
   "error.windowIcon": "Не удалось задать значок окна. {detail}",
   "language.aria": "Язык",
-  "language.blurb": "При первом запуске SecretSticky берёт язык Windows. Выберите язык, чтобы переключить его сразу. Заметки, пароль и автоблокировка останутся как есть.",
+  "language.blurb": "При первом запуске SecretSticky берёт язык системы. Выберите язык, чтобы переключить его сразу. Заметки, пароль и автоблокировка останутся как есть.",
   "language.current": "Текущий язык",
   "language.title": "Язык",
   "manager.about": "О программе",

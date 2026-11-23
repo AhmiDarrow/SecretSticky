@@ -28,6 +28,10 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # A public repository: no email addresses, home-folder paths, tokens or keys.
+      - name: Sanitize check
+        run: node scripts/sanitize-check.mjs
+
       - name: Install
         run: npm ci
 

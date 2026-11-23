@@ -1,6 +1,6 @@
 {
   "about.aria": "SecretSticky について",
-  "about.blurb": "Windows 向けの、この PC だけの暗号化された付箋です。ライセンスは MIT。",
+  "about.blurb": "Windows と Linux 向けの、この PC だけの暗号化された付箋です。RemedyUI で作られています。ライセンスは MIT。",
   "about.checkUpdates": "更新を確認",
   "about.checking": "確認しています…",
   "about.githubProfile": "GitHub プロフィール",
@@ -78,7 +78,7 @@
   "error.window": "ウィンドウを開けませんでした。{detail}",
   "error.windowIcon": "ウィンドウのアイコンを設定できませんでした。{detail}",
   "language.aria": "言語",
-  "language.blurb": "最初の起動時、SecretSticky は Windows の言語に合わせます。言語を選ぶとすぐに切り替わります。付箋、パスワード、自動ロックはそのままです。",
+  "language.blurb": "最初の起動時、SecretSticky は システムの言語に合わせます。言語を選ぶとすぐに切り替わります。付箋、パスワード、自動ロックはそのままです。",
   "language.current": "現在の言語",
   "language.title": "言語",
   "manager.about": "情報",
