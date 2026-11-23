@@ -39,15 +39,17 @@ impl Updater {
     }
 }
 
-/// The banner in the shipped app's words; the installer restarts the app.
-fn texts() -> BannerText {
+/// The banner in the shipped app's words and language (About is built again after every
+/// language switch); the installer restarts the app.
+fn texts(l: crate::lang::Lang) -> BannerText {
     let mut t = BannerText::default();
-    t.checking = "Checking…".into();
-    t.up_to_date = format!("You're on the latest version ({}).", env!("CARGO_PKG_VERSION"));
-    t.available = "Update {version} is ready to install.".into();
-    t.downloading = "Downloading update…".into();
-    t.ready = "Installing…".into();
-    t.install = "Install & restart".into();
+    t.checking = l.t("about.checking");
+    t.up_to_date = l.tv("update.upToDate", &[("version", env!("CARGO_PKG_VERSION"))]);
+    // The release's version is filled by the banner.
+    t.available = l.t("update.ready");
+    t.downloading = l.t("update.downloading");
+    t.ready = l.t("about.installing");
+    t.install = l.t("about.installRestart");
     t.restart = None;
     t
 }
@@ -128,11 +130,9 @@ fn restart(st: &St, up_: &Rc<Updater>) {
 pub fn section(st: &St, ui: &Ui, up_: &Rc<Updater>) -> El {
     let unit = ui.theme().spacing.unit;
     let (s1, u1, s2, u2, s3, u3) = (st.clone(), up_.clone(), st.clone(), up_.clone(), st.clone(), up_.clone());
-    let banner = up::update_banner_with(ui, up_.state, &texts(), move || install(&s1, &u1), move || restart(&s2, &u2));
-    let state = up_.state;
-    let check_label = move || {
-        if matches!(state.get(), UpdateState::Checking) { "Checking…".to_owned() } else { "Check for updates".to_owned() }
-    };
+    let banner = up::update_banner_with(ui, up_.state, &remedy_ui::reactive::untrack(|| texts(st.lang)), move || install(&s1, &u1), move || restart(&s2, &u2));
+    let (state, l) = (up_.state, st.lang);
+    let check_label = move || l.t(if matches!(state.get(), UpdateState::Checking) { "about.checking" } else { "about.checkUpdates" });
     w::column(ui)
         .gap(unit * 2.0)
         .fill_width()

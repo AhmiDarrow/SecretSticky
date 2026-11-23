@@ -33,11 +33,35 @@ pub fn theme() -> Theme {
     // The shipped typeface first (`font-family: "Inter", system-ui, …` in `src/App.css`); the
     // files come with `fonts::with_inter`.
     t.font_families.insert(0, crate::fonts::FAMILY.to_owned());
+    // 0.2.0's stack after Inter: the system faces that carry Japanese, Korean and Chinese.
+    for (i, f) in CJK_FALLBACK.iter().enumerate() {
+        t.font_families.insert(1 + i, (*f).to_owned());
+    }
     if let Ok(c) = Color::from_hex(ON_ACCENT) {
         t.colors.on_accent = c;
     }
     t
 }
+
+/// The faces 0.2.0 lists after Inter (`font-family` in `src/App.css`), so Japanese, Korean
+/// and Chinese text uses the system's own fonts for those scripts.
+const CJK_FALLBACK: [&str; 15] = [
+    "Segoe UI",
+    "Yu Gothic UI",
+    "Yu Gothic",
+    "Meiryo",
+    "Malgun Gothic",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    "PingFang SC",
+    "Hiragino Sans",
+    "Noto Sans CJK JP",
+    "Noto Sans CJK KR",
+    "Noto Sans CJK SC",
+    "Noto Sans JP",
+    "Noto Sans KR",
+    "Noto Sans SC",
+];
 
 /// The well a recovery key sits in: the shipped `.recovery` background.
 const INSET: &str = "#111214";
@@ -51,6 +75,10 @@ pub fn sheet(t: &Theme) -> StyleSheet {
     let inset = Color::from_hex(INSET).unwrap_or(c.bg);
     s.rule("card", Some("inset"), States::NONE, StylePatch::new().background(inset));
     s.rule("label", Some("ok"), States::NONE, StylePatch::new().foreground(c.ok));
+    // Password fields as shipped (`.gate-form input`): the inset well, an amber edge when
+    // focused.
+    s.rule("secret_input", None, States::NONE, StylePatch::new().background(inset));
+    s.rule("secret_input", None, States::FOCUS, StylePatch::new().border(c.accent));
     // A note's title and text sit on the note's own color: no frame until focused, then a
     // frame in the note's ink (dark on light notes, light on dark ones).
     for w in ["text_input", "text_area"] {

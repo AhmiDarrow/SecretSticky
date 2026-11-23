@@ -65,7 +65,8 @@ pub fn placement(dto: &NoteDto) -> (f64, f64, f64, f64) {
 pub fn open(st: &St, dto: NoteDto) {
     let id = dto.id.clone();
     let (x, y, width, height) = placement(&dto);
-    let spec = WindowSpec::new(window_title(&dto.title))
+    let lang = st.lang;
+    let spec = WindowSpec::new(remedy_ui::reactive::untrack(|| window_title(lang, &dto.title)))
         .size(width as f32, height as f32)
         .min_size(NOTE_MIN_WIDTH as f32, NOTE_MIN_HEIGHT as f32)
         .position(x as f32, y as f32)
@@ -107,7 +108,7 @@ pub fn open(st: &St, dto: NoteDto) {
                 Ok(note) => {
                     saved.set_if_changed(true);
                     if let Some(win) = slot.borrow().as_ref() {
-                        win.set_title(window_title(&note.title));
+                        win.set_title(remedy_ui::reactive::untrack(|| window_title(lang, &note.title)));
                     }
                     if list_changed {
                         state::reload_notes(&st);
@@ -137,7 +138,9 @@ pub fn open(st: &St, dto: NoteDto) {
         let st = st2;
         let unit = ui.theme().spacing.unit;
         let tool_style = move || StylePatch::new().background(Color::TRANSPARENT).foreground(ink(&color.get()));
-        let tool = |glyph: Icon, label: &str, f: Box<dyn Fn()>| w::icon_button(ui, glyph, label, f).variant("quiet").style(tool_style);
+        let l = st.lang;
+        let tool =
+            |glyph: Icon, key: &'static str, f: Box<dyn Fn()>| w::icon_button(ui, glyph, l.k(key), f).variant("quiet").style(tool_style);
 
         // A short message under the text (copies, errors), gone after a moment.
         let hint = Debounce::default();
@@ -156,23 +159,36 @@ pub fn open(st: &St, dto: NoteDto) {
         let copied: Rc<dyn Fn(&str)> = {
             let say = say.clone();
             Rc::new(move |what: &str| {
-                say(false, format!("{what} · clears in {}s", COPY_KEEP.as_secs()), Duration::from_millis(2500));
+                let text = l.tv("note.copiedClears", &[("label", what), ("seconds", &COPY_KEEP.as_secs().to_string())]);
+                say(false, text, Duration::from_millis(2500));
             })
         };
         let field = |f: remedy_ui::TextField| {
             let copied = copied.clone();
-            f.copy_as_secret(COPY_KEEP).on_copy(move || copied("Copied"))
+            f.copy_as_secret(COPY_KEEP).on_copy(move || copied(&l.t("note.copied")))
         };
-        let title = field(w::text_input(ui, "Title").placeholder("Title"));
+        let title = field(w::text_input(ui, l.t("note.titlePlaceholder")));
+        l.name_field(&title, "note.titlePlaceholder", Some("note.titlePlaceholder"));
         title.set_value(&title_text);
-        let body = field(w::text_area(ui, "Note").placeholder("Secrets, API keys, passwords…"));
+        // A blank note's window title ("Sticky note") follows a language switch.
+        let (t2, w2) = (title.clone(), win.clone());
+        let _ = title.el().bind(move || {
+            let _ = l.id();
+            remedy_ui::reactive::untrack(|| w2.set_title(window_title(l, &t2.value())));
+        });
+        // "Note": the shipped text area's own name (its role), not a catalog string.
+        let body = field(w::text_area(ui, "Note"));
+        let b2 = body.clone();
+        let _ = body.el().bind(move || {
+            let _ = b2.clone().placeholder(l.t("note.bodyPlaceholder"));
+        });
         body.set_value(&body_text);
 
         let copy_out: Rc<dyn Fn(String, &str)> = {
             let (app, say, copied) = (st.app.clone(), say.clone(), copied.clone());
             Rc::new(move |text: String, what: &str| {
                 if text.is_empty() {
-                    say(false, "Nothing to copy".to_owned(), Duration::from_millis(1500));
+                    say(false, l.t("note.nothingToCopy"), Duration::from_millis(1500));
                     return;
                 }
                 app.copy_secret(text, COPY_KEEP);
@@ -181,9 +197,11 @@ pub fn open(st: &St, dto: NoteDto) {
         };
 
         // Title bar: the colors, then the actions. Drag anywhere that is not a control.
-        let swatches = COLORS.iter().fold(w::wrap(ui).gap(0.0), |row, (c, name)| {
+        let swatches = COLORS.iter().fold(w::wrap(ui).gap(0.0), |row, (c, _)| {
             let (pick, pending, schedule) = (c.clone(), pending2.clone(), schedule2.clone());
-            row.child(crate::manager::swatch(ui, c, 16.0, (*name).to_owned(), Some(color), move || {
+            let named = c.clone();
+            let label = move || state::color_name(l, &named);
+            row.child(crate::manager::swatch(ui, l, c, 16.0, label, Some(color), move || {
                 color.set(pick.clone());
                 pending.borrow_mut().color = Some(pick.clone());
                 schedule();
@@ -191,12 +209,12 @@ pub fn open(st: &St, dto: NoteDto) {
         });
         let saving = w::text(ui, move || if saved.get() { "✓".to_owned() } else { "…".to_owned() })
             .style(move || StylePatch::new().foreground(ink(&color.get()).with_alpha(0.7)))
-            .semantics(move || Semantics::new(Role::Status).label(if saved.get() { "Saved" } else { "Saving…" }));
+            .semantics(move || Semantics::new(Role::Status).label(l.t(if saved.get() { "note.saved" } else { "note.saving" })));
         let pin = {
             let (win, pending, schedule) = (win.clone(), pending2.clone(), schedule2.clone());
             tool(
                 Icon::Pin,
-                "Always on top",
+                "note.pin",
                 Box::new(move || {
                     let on = !pinned.get();
                     pinned.set(on);
@@ -209,7 +227,7 @@ pub fn open(st: &St, dto: NoteDto) {
         let pin2 = pin.clone();
         let pin = pin.bind(move || pin2.state(States::CHECKED, pinned.get())).semantics(move || {
             Semantics::new(Role::Button)
-                .label(if pinned.get() { "Unpin" } else { "Always on top" })
+                .label(l.t(if pinned.get() { "note.unpin" } else { "note.pin" }))
                 .checked(pinned.get())
                 .action(Action::Click)
         });
@@ -218,13 +236,13 @@ pub fn open(st: &St, dto: NoteDto) {
             let (body, copy_out) = (body.clone(), copy_out.clone());
             tool(
                 Icon::Copy,
-                "Copy selection or full body (auto-clears in 30s)",
+                "note.copyTitle",
                 Box::new(move || {
                     let range = body.selection();
                     let text = body.value();
                     match text.get(range.clone()).filter(|s| !s.is_empty()) {
-                        Some(sel) => copy_out(sel.to_owned(), "Copied selection"),
-                        None => copy_out(text, "Copied body"),
+                        Some(sel) => copy_out(sel.to_owned(), &l.t("note.copiedSelection")),
+                        None => copy_out(text, &l.t("note.copiedBody")),
                     }
                 }),
             )
@@ -233,15 +251,15 @@ pub fn open(st: &St, dto: NoteDto) {
         let actions = w::row(ui)
             .gap(unit * 0.5)
             .align(Align::Center)
-            .child(tool(Icon::Plus, "New note (same color)", Box::new(move || state::new_note(&s1, color.get()))))
-            .child(tool(Icon::Home, "Open manager", Box::new(move || state::show_manager(&s2))))
-            .child(tool(Icon::Lock, "Lock vault", Box::new(move || state::lock_all(&s3))))
+            .child(tool(Icon::Plus, "note.newNoteSame", Box::new(move || state::new_note(&s1, color.get()))))
+            .child(tool(Icon::Home, "note.openManager", Box::new(move || state::show_manager(&s2))))
+            .child(tool(Icon::Lock, "note.lockVault", Box::new(move || state::lock_all(&s3))))
             .child(saving)
             .child(copy)
             .child(pin)
             .child(tool(
                 Icon::Close,
-                "Close",
+                "note.close",
                 Box::new(move || {
                     closing_flush();
                     closing_win.close();
