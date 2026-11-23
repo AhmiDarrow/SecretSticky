@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-11-22
+
+### Changed
+
+- **About** says SecretSticky is for Windows and Linux and built with RemedyUI, in every language.
+- **Language** says SecretSticky follows the system's language on first launch (it said Windows), in every language.
+
 ## [1.0.3] — 2026-11-22
 
 ### Added
