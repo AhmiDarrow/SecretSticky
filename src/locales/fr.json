@@ -170,5 +170,7 @@
   "update.ready": "La mise à jour {version} est prête à être installée.",
   "update.upToDate": "Vous avez la dernière version ({version}).",
   "font.blurb": "Choisissez la police de toutes les fenêtres. Vos notes restent inchangées.",
-  "font.title": "Police"
+  "font.title": "Police",
+  "textSize.blurb": "Agrandit ou réduit le texte de toutes les fenêtres. Vos notes restent inchangées.",
+  "textSize.title": "Taille du texte"
 }

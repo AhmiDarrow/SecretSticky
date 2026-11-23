@@ -27,15 +27,17 @@ pub const BRAND: Palette = Palette {
 /// Text on the amber accent: the shipped `--accent-text`.
 const ON_ACCENT: &str = "#1a1b1e";
 
-/// The SecretSticky theme, in the shipped typeface.
+/// The SecretSticky theme, in the shipped typeface at its designed size.
 pub fn theme() -> Theme {
-    theme_with(crate::fonts::FAMILY)
+    theme_with(crate::fonts::FAMILY, 1.0)
 }
 
 /// The SecretSticky theme with `family` (one of [`crate::fonts::CHOICES`]) for every text,
 /// headings included.
-pub fn theme_with(family: &str) -> Theme {
+pub fn theme_with(family: &str, text_scale: f32) -> Theme {
     let mut t = remedy_ui_themes::theme(&BRAND);
+    // The person's text size: every text, as Windows' own text-size setting does.
+    t.text_scale = text_scale;
     // The chosen typeface first; by default the shipped one (`font-family: "Inter", system-ui,
     // …` in `src/App.css`). The files come with `fonts::with_inter`.
     let mut stack = vec![family.to_owned()];

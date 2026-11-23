@@ -170,5 +170,7 @@
   "update.ready": "Update {version} kann installiert werden.",
   "update.upToDate": "Sie haben die neueste Version ({version}).",
   "font.blurb": "Wählen Sie die Schrift für alle Fenster. Ihre Notizen bleiben unverändert.",
-  "font.title": "Schriftart"
+  "font.title": "Schriftart",
+  "textSize.blurb": "Macht den Text in allen Fenstern größer oder kleiner. Ihre Notizen bleiben unverändert.",
+  "textSize.title": "Textgröße"
 }
