@@ -810,8 +810,22 @@ fn language(st: &St, ui: &Ui, panel: Signal<Panel>) -> El {
         row.child(b)
     });
     let grid = grid.semantics(move || Semantics::new(Role::Group).label(l.t("language.aria")));
+    // The typeface for every window: Inter (as shipped) or one of Ahmi Darrow's families.
+    let font = st.font;
+    let fonts = crate::fonts::CHOICES.iter().fold(w::wrap(ui).gap(unit * 1.5).fill_width(), |row, &(id, _, name)| {
+        let st = st.clone();
+        let b = w::button(ui, name, move || state::set_font(&st, id))
+            .grow(1.0)
+            .layout(|l| l.basis = remedy_ui::layout::Length::Px(136.0))
+            .variant(move || if font.get() == id { "primary" } else { "" });
+        row.child(b.semantics(move || Semantics::new(Role::Button).label(name).checked(font.get() == id).action(Action::Click)))
+    });
+    let fonts = fonts.semantics(move || Semantics::new(Role::Group).label(l.t("font.title")));
     panel_card(ui, l, "language.title", "language.blurb")
         .child(grid)
+        .child(w::heading(ui, 3, l.k("font.title")))
+        .child(fineprint(ui, l.k("font.blurb")))
+        .child(fonts)
         .child(panel_footer(ui, move || format!("{}: {}", l.t("language.current"), l.native()), l.k("common.close"), panel))
 }
 

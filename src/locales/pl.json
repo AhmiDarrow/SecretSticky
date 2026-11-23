@@ -168,5 +168,7 @@
   "update.downloading": "Pobieranie aktualizacji…",
   "update.downloadingPct": "Pobieranie aktualizacji… {pct}%",
   "update.ready": "Aktualizacja {version} jest gotowa do instalacji.",
-  "update.upToDate": "Masz najnowszą wersję ({version})."
+  "update.upToDate": "Masz najnowszą wersję ({version}).",
+  "font.blurb": "Wybierz krój pisma dla wszystkich okien. Twoje notatki pozostaną bez zmian.",
+  "font.title": "Czcionka"
 }
