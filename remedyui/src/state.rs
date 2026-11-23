@@ -69,6 +69,8 @@ pub struct Sticky {
     pub load_error: String,
     /// The interface language.
     pub lang: Lang,
+    /// The chosen font's id ([`crate::fonts::CHOICES`]).
+    pub font: Signal<String>,
     /// Where `vault.json` and `settings.json` live.
     pub data_dir: std::path::PathBuf,
     pub throttle: RefCell<UnlockThrottle>,
@@ -171,6 +173,17 @@ pub fn set_language(st: &St, id: &str) {
     }
 }
 
+/// Saves `id` as the font and restyles every window with it at once.
+pub fn set_font(st: &St, id: &str) {
+    match crate::settings::save_font(&st.data_dir, id) {
+        Ok(()) => {
+            st.app.set_theme(crate::theme::theme_with(crate::fonts::family(id)));
+            st.font.set_if_changed(id.to_owned());
+        }
+        Err(e) => st.error.set(Some(Msg::Error(e))),
+    }
+}
+
 /// Builds the app on the default vault, or the one `SECRETSTICKY_VAULT` names.
 pub fn start(app: &App) {
     start_at(app, vault_override());
@@ -192,11 +205,17 @@ pub fn start_at(app: &App, vault_path: Option<std::path::PathBuf>) -> St {
     // The saved language, or the system's on first run (written to settings.json).
     let lang = secretsticky_shipped_i18n::load_or_init_lang(&data_dir);
     app.set_locale(Some(lang.clone()));
+    // The saved font, if not the shipped one, restyles every window.
+    let font = crate::settings::load_font(&data_dir);
+    if font != crate::fonts::CHOICES[0].0 {
+        app.set_theme(crate::theme::theme_with(crate::fonts::family(&font)));
+    }
     let st: St = Rc::new(Sticky {
         app: app.clone(),
         vault,
         load_error,
         lang: Lang(Signal::new(lang)),
+        font: Signal::new(font),
         data_dir,
         throttle: RefCell::new(UnlockThrottle::new()),
         screen: Signal::new(Screen::Unlock),

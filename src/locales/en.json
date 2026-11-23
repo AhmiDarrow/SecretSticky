@@ -168,5 +168,7 @@
   "update.downloading": "Downloading update…",
   "update.downloadingPct": "Downloading update… {pct}%",
   "update.ready": "Update {version} is ready to install.",
-  "update.upToDate": "You're on the latest version ({version})."
+  "update.upToDate": "You're on the latest version ({version}).",
+  "font.blurb": "Choose the typeface for every window. Your notes stay as they are.",
+  "font.title": "Font"
 }

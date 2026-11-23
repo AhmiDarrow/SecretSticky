@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-11-22
+
+### Fixed
+
+- Long notes scroll again, with the mouse wheel and the touchpad; the text stays inside the note.
+- Middle-click autoscroll is back: click the middle button over a long note (or the note list) and move the mouse to scroll; click again or press Escape to stop.
+- Note windows have rounded corners and the Windows shadow again.
+- The pin button shows whether the note is pinned: a filled pin when it stays on top, a faded one when it does not, and its tooltip says Pin or Unpin.
+
+### Added
+
+- Font choice in **Language**: Inter (as before), Remedy Sans, Remedy Sans UI, Ahmi Print or Ahmi Pixel, for every window at once. It is saved with your language in `settings.json`; your notes are not changed.
+
 ## [1.0.0] — 2026-11-22
 
 SecretSticky 1.0 has a new interface built on RemedyUI. Notes, the vault, the master password and the recovery key are the same.
