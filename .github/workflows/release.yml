@@ -1,15 +1,15 @@
 name: Release
 
+# SecretSticky 1.0 and later: the RemedyUI build in remedyui/. Installed Tauri builds
+# (0.1.2 to 0.2.0) update to it: they read latest.json from the newest release, check the
+# installer's signature with the key in src-tauri/tauri.conf.json, and run it; the installer
+# takes over their install and leaves the vault in %APPDATA%\SecretSticky alone.
+
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to build (e.g. v0.1.2). Leave empty to use package version."
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -25,73 +25,81 @@ jobs:
   build-windows:
     name: Build Windows installer
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Checkout
+      # remedyui/Cargo.toml finds RemedyUI at ../../Projects/RemedyUI.
+      - name: Checkout SecretSticky
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: npm
+          path: SecretSticky
+
+      - name: Checkout RemedyUI
+        uses: actions/checkout@v4
+        with:
+          repository: AhmiDarrow/RemedyUI
+          ref: main
+          path: Projects/RemedyUI
+          token: ${{ secrets.REMEDYUI_READ_TOKEN }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - name: Install frontend deps
-        run: npm ci
-
-      - name: Run tests (gate)
+      - name: Install Inno Setup
+        shell: pwsh
         run: |
-          npm test
-          cargo test --manifest-path src-tauri/Cargo.toml
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
-      - name: Require updater signing key
-        shell: bash
-        run: |
-          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
-            echo "::error::Missing repo secret TAURI_SIGNING_PRIVATE_KEY (minisign private key for updater artifacts)."
-            echo "Generate with: npx tauri signer generate -w ~/.tauri/secretsticky.key"
-            echo "Then: gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/secretsticky.key"
-            exit 1
-          fi
+      - name: Install cargo-remedy
+        run: cargo install --locked --path Projects/RemedyUI/crates/cargo-remedy
 
-      - name: Build Tauri (NSIS + MSI + updater)
-        uses: tauri-apps/tauri-action@v0
+      - name: Package and sign
+        working-directory: SecretSticky/remedyui
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
-          releaseName: "SecretSticky ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}"
-          releaseBody: |
-            ## SecretSticky ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          REMEDY_UPDATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::Missing repo secret TAURI_SIGNING_PRIVATE_KEY"; exit 1; fi
+          # Tauri keeps the minisign key file base64-encoded.
+          printf '%s' "$KEY" | base64 -d > "$RUNNER_TEMP/update.key"
+          REMEDY_UPDATE_KEY="$RUNNER_TEMP/update.key" cargo remedy package
+          rm -f "$RUNNER_TEMP/update.key"
 
-            Encrypted sticky notes for Windows — Sticky Notes feel, secrets safe at rest.
+      - name: Write latest.json
+        working-directory: SecretSticky/remedyui/target/remedy/dist
+        run: |
+          version=$(grep -m1 '^version' ../../../Cargo.toml | cut -d'"' -f2)
+          tag="${GITHUB_REF_NAME}"
+          [ "$tag" = "v$version" ] || { echo "::error::tag $tag is not v$version"; exit 1; }
+          setup="SecretSticky_${version}_x64-setup.exe"
+          [ -f "$setup" ] && [ -f "$setup.sig" ] || { echo "::error::$setup or its .sig is missing"; exit 1; }
+          # Tauri's feed: the signature is the .sig file, base64-encoded.
+          sig=$(base64 -w0 "$setup.sig")
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${setup}"
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > latest.json <<EOF
+          {
+            "version": "${version}",
+            "notes": "See https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md",
+            "pub_date": "${now}",
+            "platforms": {
+              "windows-x86_64": { "signature": "${sig}", "url": "${url}" },
+              "windows-x86_64-nsis": { "signature": "${sig}", "url": "${url}" },
+              "windows-x86_64-msi": { "signature": "${sig}", "url": "${url}" }
+            }
+          }
+          EOF
+          cat latest.json
 
-            Hi I'm Ahmi, hope this helps!
-            - Profile: https://github.com/AhmiDarrow
-            - Repo: https://github.com/AhmiDarrow/SecretSticky
-
-            ### Install
-            - Prefer the **NSIS setup** (`.exe`) for a normal Windows install (desktop shortcut + Start Menu + taskbar icon).
-            - MSI is also attached when available.
-            - Installed builds check **GitHub Releases** for signed updates (About → Check for updates).
-
-            ### Notes
-            - Local-only vault under `%APPDATA%\SecretSticky`
-            - Master password + optional recovery key (shown once at setup)
-            - No cloud, no account, no backdoor
-
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) and the README threat model.
-          releaseDraft: true
-          prerelease: false
-          includeUpdaterJson: true
-          updaterJsonPreferNsis: true
-          args: --bundles nsis,msi
+      - name: Draft the release
+        working-directory: SecretSticky/remedyui/target/remedy/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep -m1 '^version' ../../../Cargo.toml | cut -d'"' -f2)
+          setup="SecretSticky_${version}_x64-setup.exe"
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft \
+            --title "SecretSticky $GITHUB_REF_NAME" \
+            --notes "Encrypted sticky notes for Windows, now on RemedyUI. Installed 0.1.2 and later update in place from About → Check for updates; your vault in %APPDATA%\\SecretSticky is kept. See CHANGELOG.md." \
+            "$setup" "$setup.sig" "SecretSticky_${version}_x64-portable.zip" "SecretSticky_${version}_x64-portable.zip.sig" latest.json
