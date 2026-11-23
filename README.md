@@ -1,12 +1,12 @@
 # SecretSticky
 
-**Encrypted sticky notes for Windows** — the feel of Sticky Notes, with **secrets safe at rest**.
+**Encrypted sticky notes for Windows and Linux** — the feel of Sticky Notes, with **secrets safe at rest**.
 
 Use it for API keys, passwords, recovery codes, and anything you would not trust to plain Sticky Notes or a synced notepad.
 
 [![CI](https://github.com/AhmiDarrow/SecretSticky/actions/workflows/ci.yml/badge.svg)](https://github.com/AhmiDarrow/SecretSticky/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://github.com/AhmiDarrow/SecretSticky/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078D6)](https://github.com/AhmiDarrow/SecretSticky/releases)
 
 <p align="center">
   <img src="src-tauri/icons/128x128.png" alt="SecretSticky icon" width="96" height="96" />
@@ -27,69 +27,78 @@ Windows Sticky Notes is great for quick capture and terrible for secrets (plain 
 | Area | Details |
 |------|---------|
 | **Vault** | Master password unlock; optional recovery key (shown once at setup) |
-| **Crypto** | Argon2id (64 MiB, t=3) + XChaCha20-Poly1305 AEAD |
+| **Crypto** | Argon2id (64 MiB, t=3) + XChaCha20-Poly1305 AEAD |
 | **Keys** | Stable content key — change password without re-encrypting notes or killing recovery |
-| **Notes** | Multiple colored stickies (incl. black & dark green), per-note 📌 pin keeps a note on top (off by default), high-contrast ink |
+| **Notes** | Multiple colored stickies (incl. black & dark green); the pin keeps a note on top and shows when it is on; long notes scroll (wheel, touchpad, middle-click autoscroll) |
 | **Tray** | New note · Show manager · Open all · Lock · Quit |
-| **UX** | Single instance (second launch focuses manager); close manager → tray; open a sticky → manager tucks away; every sticky has **New note / Manager / Lock**; Inter font (self-hosted) |
-| **Windows** | Manager default **440×560**; sticky min **345×250** (new notes **345×280**) |
+| **UX** | Single instance (second launch focuses manager); close manager → tray; every sticky has **New note / Manager / Lock** |
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |
 | **Idle** | Auto-lock after inactivity — 15 min default, **Off–12 h** presets in the manager |
-| **Updates** | Signed auto-update from GitHub Releases (About → Check for updates) |
-| **Language** | Follows Windows on first launch (English if unsupported). Switch anytime from the unlock screen, recovery screen, or manager → Language. Saved in `settings.json` (not inside the vault) and applied immediately, including the tray menu |
-| **About** | “Hi I'm Ahmi, hope this helps!” + profile / repo links |
+| **Language** | Eleven languages. Follows the system language on first launch (English if unsupported); switch any time from the unlock screen, the recovery screen or manager → Language, applied at once, tray included |
+| **Font & size** | Manager → Language: Inter (default), Remedy Sans, Remedy Sans UI, Ahmi Print or Ahmi Pixel, and text size 90–150%, for every window at once |
+| **Updates** | Signed updates from GitHub Releases (About → Check for updates) |
 
 ## Install
 
-### Prebuilt (recommended)
+Download from **[Releases](https://github.com/AhmiDarrow/SecretSticky/releases/latest)**.
 
-Download the latest Windows installer from  
-**[Releases](https://github.com/AhmiDarrow/SecretSticky/releases/latest)**  
-(NSIS `.exe` setup; MSI when available).
+### Windows
 
-The NSIS installer creates **Start Menu** and **Desktop** shortcuts that use the sticky+lock icon (same mark as the taskbar and tray).
+Run `SecretSticky_<version>_x64-setup.exe`: a per-user install (no administrator rights) with Start Menu and optional desktop shortcuts. It takes over an earlier SecretSticky install (0.1.x and 0.2.0, including the MSI) and keeps your notes.
 
-Installed builds can update themselves: **About → Check for updates** downloads the next signed release from GitHub and restarts the app.
+### Linux (x86-64)
+
+Needs glibc 2.28 or newer (Debian 10, RHEL 8, Ubuntu 20.04 and later).
+
+```bash
+tar -xzf SecretSticky-<version>-linux-x86_64.tar.gz --strip-components=1 -C ~/.local
+```
+
+That installs `~/.local/bin/SecretSticky`, a menu entry and the icon; open SecretSticky from your apps menu.
+
+### Updates
+
+**About → Check for updates** downloads the next release, checks its signature, and restarts the app: Windows runs the new installer, Linux replaces the program. Your notes are never part of an update.
 
 ### From source
 
+SecretSticky 1.0 and later is the Rust app in `remedyui/`, built on RemedyUI, Ahmi Darrow's UI engine. RemedyUI is not public yet, so building from source needs a checkout of it: `remedyui/Cargo.toml` finds it in a `Projects/RemedyUI` folder next to the `SecretSticky` folder.
+
 ```bash
-git clone https://github.com/AhmiDarrow/SecretSticky.git
-cd SecretSticky
-npm install
-npm run tauri:dev      # development
-npm run tauri:build    # release installers under src-tauri/target/release/bundle/
+cd SecretSticky/remedyui
+cargo run --release
 ```
 
-**Requirements:** Windows 10/11, Node 22+, Rust stable, WebView2.
+**Requirements:** Rust stable; on Linux the usual X11/Wayland libraries (the app loads them at startup).
 
 ## Quick start
 
 1. Launch SecretSticky → create a master password (12+ characters).
 2. **Save the recovery key offline** (shown once). Lost password + lost recovery = permanent data loss.
-3. Pick a color → sticky opens. Type secrets. Save indicator confirms disk write.
+3. Pick a color → sticky opens. Type secrets. The save mark confirms the disk write.
 4. Close the manager with **X** → app stays in the tray. Tray → **Quit** to exit fully.
 5. Tray → **Lock** when you step away.
 
 ## Data layout
 
 ```
-%APPDATA%\SecretSticky\
+Windows: %APPDATA%\SecretSticky\
+Linux:   ~/.local/share/SecretSticky/
   vault.json      # encrypted note blobs + KDF params (no plaintext titles/bodies)
   vault.json.bak  # last-known-good copy (restored if live is missing/corrupt)
-  settings.json   # UI language only (not secrets). Unknown keys are kept
+  settings.json   # language, font and text size (not secrets). Unknown keys are kept
 ```
 
-`--home <dir>` (or `--home=<dir>`) uses that folder instead of `%APPDATA%\SecretSticky`. `SECRETSTICKY_HOME` does the same when the flag is absent. The flag wins. Auto-update relaunches with the same arguments, so a custom home stays in use.
+`--home <dir>` (or `--home=<dir>`) uses that folder instead. `SECRETSTICKY_HOME` does the same when the flag is absent. The flag wins. Updates relaunch with the same arguments, so a custom home stays in use.
 
-- **Encrypted:** note title, note body  
+- **Encrypted:** note title, note body
 - **Plaintext by design:** window geometry, color id, timestamps (so chrome can restore without unlock content)
 
 Durable save path: write + flush temp → snapshot `.bak` → atomic replace into `vault.json` (Windows uses `MoveFileExW` replace-in-place — never delete-then-rename). A crash mid-write must not leave you with zero copies of secrets.
 
 ### Updates must NEVER corrupt saved stickies
 
-**Non-negotiable product rule:** installing or auto-updating SecretSticky only replaces the application. Your vault stays under `%APPDATA%\SecretSticky\` and must remain unlockable with the same master password / recovery key after every update. App releases must not wipe notes, rewrite ciphertext incompatibly, or ship ACL/UI changes that leave stickies permanently unreadable. Full invariant: [SECURITY.md](SECURITY.md).
+**Non-negotiable product rule:** installing or updating SecretSticky only replaces the application. Your vault stays where it is and must remain unlockable with the same master password / recovery key after every update. App releases must not wipe notes, rewrite ciphertext incompatibly, or ship changes that leave stickies permanently unreadable. Every release is tested against vaults written by the shipped 0.1.0, 0.1.8 and 0.2.0 code. Full invariant: [SECURITY.md](SECURITY.md).
 
 ## Security model
 
@@ -97,13 +106,12 @@ Durable save path: write + flush temp → snapshot `.bak` → atomic replace int
 
 - Vault file at rest (disk theft, backups, casual snooping)
 - Authenticated encryption of note contents
-- IPC least-privilege: a sticky window cannot list vault admin actions or read another note’s body (it may only create a sibling note or lock the vault)
+- Note windows are kept out of screen capture where the system allows it (Windows)
 
 ### Does **not** protect
 
-- Malware / keyloggers while unlocked  
-- Screen capture of open stickies  
-- A compromised OS or attached debugger  
+- Malware / keyloggers while unlocked
+- A compromised OS or attached debugger
 
 There is **no cloud**, **no account**, and **no backdoor**.
 
@@ -112,59 +120,33 @@ See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 ## Development
 
 ```bash
-npm install
-npm run tauri:dev
+cd remedyui
+cargo test            # vault round trips with the shipped versions, every screen, languages, fonts
+cargo run             # the app
 
-# Tests
-npm test              # TypeScript check + Vitest (UI helpers)
-npm run test:rust     # Rust crypto / vault / ACL
-npm run test:all      # both
-npm run build         # Vite production bundle only
+cd ..
+npm run sanitize      # no email addresses, home-folder paths, tokens or keys in tracked files
 ```
 
 | Path | Role |
 |------|------|
-| `src/` | React UI (unlock, manager, sticky windows) |
-| `src-tauri/src/crypto.rs` | KDF + AEAD |
-| `src-tauri/src/vault.rs` | On-disk format + session |
-| `src-tauri/src/commands.rs` | Tauri IPC, windows, tray |
-| `.github/workflows/` | CI + tag release builds |
+| `remedyui/` | The app (1.0+): manager, sticky windows, tray, updater, on RemedyUI |
+| `remedyui/tests/fixtures/` | Vaults made by the shipped 0.1.0, 0.1.8 and 0.2.0 code, for round-trip tests |
+| `src-tauri/src/crypto.rs`, `vault.rs`, `i18n.rs` | Crypto, on-disk format and catalogs, shared by the app (unchanged from 0.2.0) |
+| `src/locales/` | The interface text in eleven languages |
+| `src/`, `src-tauri/` | The Tauri app that shipped 0.1.x and 0.2.0 |
+| `.github/workflows/` | CI, and signing of releases |
 
 ## CI & releases
 
-- **CI** (`.github/workflows/ci.yml`) — on push/PR to `main`: frontend tests + Vite build, Rust fmt + tests (Windows).
-- **Release** (`.github/workflows/release.yml`) — on tag `v*` (or manual dispatch): test gate, then signed Tauri NSIS/MSI + updater `latest.json`, draft GitHub Release.
-
-```bash
-# Bump every version surface from one command (no hardcoded versions anywhere else)
-npm run bump:version -- <X.Y.Z>
-
-# Update CHANGELOG.md, commit to main, then tag and let the Release workflow build:
-git tag v<X.Y.Z>
-git push origin v<X.Y.Z>
-```
-
-Requires repo secret `TAURI_SIGNING_PRIVATE_KEY` (see CONTRIBUTING).
+- **CI** (`.github/workflows/ci.yml`) — on push/PR to `main`: sanitize check, frontend tests + Vite build, Rust fmt + tests.
+- **Releases** — the Windows installer and the Linux package are built and tested locally with `cargo remedy package` (Windows) and `cargo remedy package --target linux` (glibc 2.28 via `cargo zigbuild`), then uploaded to a draft release. The **Release** workflow (manual, with the tag) signs them with the updater key (repo secret `TAURI_SIGNING_PRIVATE_KEY`, the key every version since 0.1.2 trusts) and writes `latest.json`.
 
 ## Stack
 
-- **Tauri 2** + **React 19** + **TypeScript** + **Vite**
-- **Rust:** `argon2`, `chacha20poly1305`, `zeroize`, `serde`
-- **Updates:** `tauri-plugin-updater` + `tauri-plugin-process` (signed GitHub Releases)
-
-## Auto-update
-
-Release builds ship with the Tauri updater plugin:
-
-1. CI signs NSIS/MSI updater artifacts with a minisign key (`TAURI_SIGNING_PRIVATE_KEY` repo secret).
-2. Each release publishes `latest.json` next to the installers.
-3. The app polls `…/releases/latest/download/latest.json`, verifies the signature with the **public** key embedded in the binary, then installs (About → Check for updates).
-
-Dev (`tauri dev`) has no installer channel — use a packaged build to exercise updates.
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for the threat model, crypto details, and reporting vulnerabilities.
+- **Rust** + **RemedyUI** (windows, text, tray, accessibility, updates)
+- **Crypto:** `argon2`, `chacha20poly1305`, `zeroize`
+- **Updates:** minisign-signed GitHub Releases
 
 ## About
 
@@ -175,9 +157,8 @@ Hi I'm Ahmi, hope this helps!
 - Releases: [github.com/AhmiDarrow/SecretSticky/releases](https://github.com/AhmiDarrow/SecretSticky/releases)
 - Support: [patreon.com/cw/AhmiDarrow](https://www.patreon.com/cw/AhmiDarrow) — thank you!
 
-SecretSticky is a small, local-first Windows app for people who live in sticky notes but need real at-rest encryption for API keys and passwords. Built with Tauri so the UI stays light and the crypto stays in Rust.
+SecretSticky is a small, local-first app for people who live in sticky notes but need real at-rest encryption for API keys and passwords. Built with RemedyUI so the whole app, interface and crypto alike, is Rust.
 
 ## License
 
-[MIT](LICENSE) © Ahmi Darrow
-
+[MIT](LICENSE) © Ahmi Darrow. The bundled fonts are under the SIL Open Font License 1.1 (`remedyui/assets/fonts/*/OFL.txt`).

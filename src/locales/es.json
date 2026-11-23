@@ -1,6 +1,6 @@
 {
   "about.aria": "Acerca de SecretSticky",
-  "about.blurb": "Notas adhesivas cifradas, solo en este equipo, para Windows. Licencia MIT.",
+  "about.blurb": "Notas adhesivas cifradas, solo en este equipo, para Windows y Linux, hechas con RemedyUI. Licencia MIT.",
   "about.checkUpdates": "Buscar actualizaciones",
   "about.checking": "Comprobando…",
   "about.githubProfile": "Perfil de GitHub",
@@ -78,7 +78,7 @@
   "error.window": "No se pudo abrir la ventana. {detail}",
   "error.windowIcon": "No se pudo asignar el icono de la ventana. {detail}",
   "language.aria": "Idioma",
-  "language.blurb": "La primera vez que se abre, SecretSticky usa el idioma de Windows. Elija un idioma para cambiarlo al momento. Las notas, la contraseña y el bloqueo automático siguen igual.",
+  "language.blurb": "La primera vez que se abre, SecretSticky usa el idioma del sistema. Elija un idioma para cambiarlo al momento. Las notas, la contraseña y el bloqueo automático siguen igual.",
   "language.current": "Idioma actual",
   "language.title": "Idioma",
   "manager.about": "Acerca de",
