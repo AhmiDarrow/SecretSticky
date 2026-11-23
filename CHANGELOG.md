@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-22
+
+SecretSticky 1.0 has a new interface built on RemedyUI. Notes, the vault, the master password and the recovery key are the same.
+
+### Changed
+
+- New interface on RemedyUI, in all eleven languages, with the same windows, tray menu, auto-lock and secret copy as before.
+- Polished: the rounded app mark, heading sizes, dark inset password fields, and a header that wraps long translations.
+
+### Install and update
+
+- Already installed (0.1.2 or later): **About → Check for updates**. The update closes the old app, replaces it, and keeps your desktop shortcut. Notes stay in `%APPDATA%\SecretSticky`; the update never touches them.
+- Installed from the MSI (for all users): the update removes that copy first, so Windows asks for administrator rights once.
+- New install: `SecretSticky_1.0.0_x64-setup.exe`, a per-user install with no administrator rights needed. 0.1.0 and 0.1.1 have no updater: run this setup and it takes over the old install the same way.
+
 ## [0.2.0] — 2026-11-15
 
 Now available in Spanish, French, German, Portuguese (Brazil), Italian, Russian, Polish, Japanese, Korean and Chinese (Simplified). Apps use your system language by default; change it any time in Settings → Language.
