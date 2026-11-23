@@ -7,6 +7,7 @@ Use it for API keys, passwords, recovery codes, and anything you would not trust
 [![CI](https://github.com/AhmiDarrow/SecretSticky/actions/workflows/ci.yml/badge.svg)](https://github.com/AhmiDarrow/SecretSticky/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078D6)](https://github.com/AhmiDarrow/SecretSticky/releases)
+[![Built with RemedyUI](https://img.shields.io/badge/built%20with-RemedyUI-8A2BE2)](#built-with-remedyui)
 
 <p align="center">
   <img src="src-tauri/icons/128x128.png" alt="SecretSticky icon" width="96" height="96" />
@@ -16,11 +17,25 @@ Use it for API keys, passwords, recovery codes, and anything you would not trust
   <strong>Local-only · Master password · Multi-window stickies · System tray</strong>
 </p>
 
+<p align="center">
+  <strong>Built with <a href="#built-with-remedyui">RemedyUI</a></strong>: one Rust app, from the pixels to the crypto.
+</p>
+
 ---
 
 ## Why
 
 Windows Sticky Notes is great for quick capture and terrible for secrets (plain local data, sync surface, no real vault). **SecretSticky** keeps the sticky UX and encrypts note titles and bodies on disk.
+
+## Built with RemedyUI
+
+Since 1.0, SecretSticky runs on **RemedyUI**, Ahmi Darrow's own Rust UI engine. Every window, the tray, text rendering, accessibility and the signed updater come from RemedyUI, so the whole app is one native Rust program:
+
+- **No web view, no browser engine, no JavaScript** between you and your secrets. The 0.x releases were a Tauri web app; 1.0 replaced all of it.
+- **One language end to end**: the interface and the vault crypto live in the same Rust process, with the same memory handling (`zeroize`).
+- **Same app on Windows and Linux**, drawn by the same engine.
+
+RemedyUI is not public yet. SecretSticky is its proof that it is ready for real, security-sensitive apps.
 
 ## Features
 
