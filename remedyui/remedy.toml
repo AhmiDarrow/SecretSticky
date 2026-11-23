@@ -1,0 +1,19 @@
+[app]
+name = "SecretSticky"
+id = "com.ahmi.secretsticky"
+publisher = "Ahmi Darrow"
+description = "Encrypted sticky notes"
+# The shipped app's icon (512 px).
+icon = "../src-tauri/icons/icon.png"
+
+# The Tauri builds (0.1.x, 0.2.0) installed to %LOCALAPPDATA%\SecretSticky. This installer
+# closes and removes that program, its shortcuts and keys; the vault in %APPDATA%\SecretSticky
+# is never touched.
+[windows.replaces]
+uninstall_key = "SecretSticky"
+files = ["secretsticky.exe", "uninstall.exe", "SecretSticky.ico"]
+registry = ['Software\ahmi\SecretSticky']
+# The Tauri app's single-instance mutex, held while 0.1.3 and later run.
+mutex = "com.ahmi.secretsticky-sim"
+# Releases 0.1.5 to 0.2.0 also shipped a per-machine MSI.
+msi_name = "SecretSticky"
