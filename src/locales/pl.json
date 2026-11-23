@@ -1,6 +1,6 @@
 {
   "about.aria": "O SecretSticky",
-  "about.blurb": "Zaszyfrowane karteczki tylko na tym komputerze, dla Windows. Licencja MIT.",
+  "about.blurb": "Zaszyfrowane karteczki tylko na tym komputerze, dla Windows i Linuksa, zbudowane z RemedyUI. Licencja MIT.",
   "about.checkUpdates": "Sprawdź aktualizacje",
   "about.checking": "Sprawdzanie…",
   "about.githubProfile": "Profil GitHub",
@@ -78,7 +78,7 @@
   "error.window": "Nie udało się otworzyć okna. {detail}",
   "error.windowIcon": "Nie udało się ustawić ikony okna. {detail}",
   "language.aria": "Język",
-  "language.blurb": "Przy pierwszym uruchomieniu SecretSticky używa języka Windows. Wybierz język, aby zmienić go od razu. Notatki, hasło i autoblokada zostają bez zmian.",
+  "language.blurb": "Przy pierwszym uruchomieniu SecretSticky używa języka systemu. Wybierz język, aby zmienić go od razu. Notatki, hasło i autoblokada zostają bez zmian.",
   "language.current": "Bieżący język",
   "language.title": "Język",
   "manager.about": "O programie",

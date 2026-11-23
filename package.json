@@ -25,7 +25,8 @@
     "test": "tsc --noEmit && vitest run",
     "test:watch": "vitest",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:all": "npm test && npm run test:rust"
+    "test:all": "npm run sanitize && npm test && npm run test:rust",
+    "sanitize": "node scripts/sanitize-check.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

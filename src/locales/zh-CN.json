@@ -1,6 +1,6 @@
 {
   "about.aria": "关于 SecretSticky",
-  "about.blurb": "只保存在这台电脑上的 Windows 加密便签。许可协议为 MIT。",
+  "about.blurb": "只保存在这台电脑上的 Windows 和 Linux 加密便签，基于 RemedyUI 构建。许可协议为 MIT。",
   "about.checkUpdates": "检查更新",
   "about.checking": "正在检查…",
   "about.githubProfile": "GitHub 个人主页",
@@ -78,7 +78,7 @@
   "error.window": "无法打开窗口。{detail}",
   "error.windowIcon": "无法设置窗口图标。{detail}",
   "language.aria": "语言",
-  "language.blurb": "第一次打开时，SecretSticky 会跟随 Windows 的语言。选择一种语言即可马上切换。便签、密码和自动锁定都保持原样。",
+  "language.blurb": "第一次打开时，SecretSticky 会跟随系统的语言。选择一种语言即可马上切换。便签、密码和自动锁定都保持原样。",
   "language.current": "当前语言",
   "language.title": "语言",
   "manager.about": "关于",
