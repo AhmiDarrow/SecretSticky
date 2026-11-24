@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-11-24
+
+### Added
+
+- **Find in a note**: Ctrl+F opens a find bar in the note. Every match is marked in the text; Enter or F3 goes to the next, Shift+Enter or Shift+F3 to the one before, Escape closes the bar and leaves the match selected. Selected words are searched for when the bar opens.
+- **Search in the manager**: Ctrl+F (or a click in **Search notes**) finds notes by their title or their text. Enter opens the first one found, Escape shows every note again.
+- **Shortcuts**. In a note: Ctrl+N new note of the same color, Ctrl+W close the note, Ctrl+S save now, Ctrl+L lock the vault. In the manager: Ctrl+N new note, Ctrl+L lock, Ctrl+W hide to the tray, Ctrl+Q quit.
+
+### Fixed
+
+- **Selecting text in a note shows.** On the light notes a selection was a dark block over dark text, so the selected words could not be read, and the caret was drawn in a light color that did not show. The selection is now a soft tint of the note's ink and the caret is the color of the text, on every note color. The gray "Title" hint is readable on every color too.
+- **Up, Down, Page Up and Page Down move the caret** through a note's lines. They did nothing before.
+- **Home and End go to the start and end of the line**, and Ctrl+Home and Ctrl+End to the start and end of the note. Home and End used to jump to the ends of the whole note. Shift with any of these selects.
+- **Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+Z and Ctrl+Y work with a Russian keyboard layout** (and any other layout without Latin letters). They did nothing while such a layout was active.
+- **Shift+Delete cuts, Ctrl+Insert copies and Shift+Insert pastes**, as elsewhere on Windows and Linux.
+
 ## [1.0.4] — 2026-11-22
 
 ### Changed

@@ -172,5 +172,14 @@
   "font.blurb": "모든 창의 글꼴을 선택합니다. 메모는 그대로 유지됩니다.",
   "font.title": "글꼴",
   "textSize.blurb": "모든 창의 글자를 크게 또는 작게 합니다. 메모는 그대로 유지됩니다.",
-  "textSize.title": "글자 크기"
+  "textSize.title": "글자 크기",
+  "find.label": "메모에서 찾기",
+  "find.status": "{current}/{count}",
+  "find.none": "일치 항목 없음",
+  "find.previous": "이전 일치 항목",
+  "find.next": "다음 일치 항목",
+  "find.close": "찾기 닫기",
+  "notes.search": "메모 검색",
+  "notes.noMatch": "“{query}”와 일치하는 메모가 없습니다.",
+  "notes.keysHint": "Ctrl+F 검색 · Ctrl+N 새 메모 · Ctrl+L 잠금"
 }

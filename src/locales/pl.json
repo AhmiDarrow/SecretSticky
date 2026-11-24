@@ -172,5 +172,14 @@
   "font.blurb": "Wybierz krój pisma dla wszystkich okien. Twoje notatki pozostaną bez zmian.",
   "font.title": "Czcionka",
   "textSize.blurb": "Powiększa lub zmniejsza tekst we wszystkich oknach. Twoje notatki pozostaną bez zmian.",
-  "textSize.title": "Rozmiar tekstu"
+  "textSize.title": "Rozmiar tekstu",
+  "find.label": "Znajdź w notatce",
+  "find.status": "{current} z {count}",
+  "find.none": "Brak wyników",
+  "find.previous": "Poprzedni wynik",
+  "find.next": "Następny wynik",
+  "find.close": "Zamknij wyszukiwanie",
+  "notes.search": "Szukaj notatek",
+  "notes.noMatch": "Żadna notatka nie pasuje do „{query}”.",
+  "notes.keysHint": "Ctrl+F szukaj · Ctrl+N nowa notatka · Ctrl+L zablokuj"
 }
