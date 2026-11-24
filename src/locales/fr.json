@@ -172,5 +172,14 @@
   "font.blurb": "Choisissez la police de toutes les fenêtres. Vos notes restent inchangées.",
   "font.title": "Police",
   "textSize.blurb": "Agrandit ou réduit le texte de toutes les fenêtres. Vos notes restent inchangées.",
-  "textSize.title": "Taille du texte"
+  "textSize.title": "Taille du texte",
+  "find.label": "Rechercher dans la note",
+  "find.status": "{current} sur {count}",
+  "find.none": "Aucun résultat",
+  "find.previous": "Résultat précédent",
+  "find.next": "Résultat suivant",
+  "find.close": "Fermer la recherche",
+  "notes.search": "Rechercher des notes",
+  "notes.noMatch": "Aucune note ne correspond à « {query} ».",
+  "notes.keysHint": "Ctrl+F rechercher · Ctrl+N nouvelle note · Ctrl+L verrouiller"
 }

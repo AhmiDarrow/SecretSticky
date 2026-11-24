@@ -189,6 +189,19 @@ impl Driver {
         self.frames(2);
     }
 
+    /// Presses `key` with `modifiers` in `window` (a key that types nothing).
+    fn press(&mut self, window: WindowId, key: Key, modifiers: Modifiers) {
+        self.host.send(HostEvent::Key(window, KeyEvent::press(key).with_modifiers(modifiers).with_text(None)));
+        self.frames(2);
+    }
+
+    /// Types `text` a key at a time into whatever has the focus in `window`.
+    fn keys(&mut self, window: WindowId, text: &str) {
+        for c in text.chars() {
+            self.key(window, &c.to_string(), false);
+        }
+    }
+
     /// Types into a field by focusing it and pasting (what a password manager does).
     fn type_into(&mut self, window: WindowId, label: &str, text: &str) {
         self.act(window, label, Action::Focus);
@@ -876,4 +889,198 @@ fn language_switches_everything_at_once_and_leaves_the_vault_alone() {
     assert!(d.has(manager, "Unlock SecretSticky"), "back to English");
     assert_eq!(d.host.tray().map(|t| t.tooltip.clone()).as_deref(), Some("SecretSticky — encrypted sticky notes"));
     assert_eq!(std::fs::read(&path).expect("vault"), vault_before, "the vault is as it was");
+}
+
+/// A vault with its recovery key put away: the unlocked manager.
+fn unlocked(dir: &tempfile::TempDir) -> (Driver, WindowId) {
+    let mut d = Driver::new(dir.path().join("vault.json"));
+    let manager = d.windows()[0];
+    d.type_into(manager, "Master password", PW);
+    d.type_into(manager, "Confirm password", PW);
+    d.click(manager, "Create vault");
+    d.until("the recovery key", |d| d.screen() == Screen::Recovery);
+    d.frames(2);
+    d.click(manager, "I already saved it — continue");
+    d.frames(2);
+    (d, manager)
+}
+
+/// A new note of `color` ("yellow") with `title` and `body`; the manager is shown again.
+fn write_note(d: &mut Driver, manager: WindowId, color: &str, title: &str, body: &str) -> WindowId {
+    d.show_manager();
+    let before = d.windows();
+    d.click(manager, &format!("New {color} note"));
+    d.frames(2);
+    let note = *d.windows().iter().find(|w| !before.contains(w)).expect("the new note's window");
+    d.type_into(note, "Title", title);
+    d.type_into(note, "Note", body);
+    d.host.advance(Duration::from_millis(500));
+    d.frames(2);
+    note
+}
+
+/// The keys people expect in a text box and in a notes app, in a note window.
+#[test]
+fn a_note_answers_the_usual_keys_and_finds_text() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (mut d, manager) = unlocked(&dir);
+    let note = write_note(&mut d, manager, "yellow", "Keys", "api key: abc\nsecond line\nthe KEY again");
+    let body = |d: &Driver| d.value(note, "Note").unwrap_or_default();
+    let ctrl = Modifiers { ctrl: true, ..Modifiers::NONE };
+    let shift = Modifiers { shift: true, ..Modifiers::NONE };
+
+    // The caret moves through the lines: Down a line, End to that line's end, not the text's.
+    d.act(note, "Note", Action::Focus);
+    d.press(note, Key::Home, ctrl);
+    d.press(note, Key::ArrowDown, Modifiers::NONE);
+    d.keys(note, "X");
+    assert_eq!(body(&d), "api key: abc\nXsecond line\nthe KEY again", "Down moved to line two");
+    d.press(note, Key::End, Modifiers::NONE);
+    d.keys(note, "!");
+    assert_eq!(body(&d), "api key: abc\nXsecond line!\nthe KEY again", "End went to the line's end");
+    d.press(note, Key::ArrowUp, Modifiers::NONE);
+    d.press(note, Key::Home, Modifiers::NONE);
+    d.press(note, Key::ArrowDown, shift);
+    d.press(note, Key::Delete, Modifiers::NONE);
+    assert_eq!(body(&d), "Xsecond line!\nthe KEY again", "Shift+Down selected the first line");
+    d.key(note, "z", true);
+    assert_eq!(body(&d), "api key: abc\nXsecond line!\nthe KEY again", "Ctrl+Z puts it back");
+
+    // Ctrl+F opens the find bar; typing searches, ignoring case.
+    assert!(!d.has(note, "Next match"), "no find bar until asked for");
+    d.key(note, "f", true);
+    assert!(d.has(note, "Next match") && d.has(note, "Previous match") && d.has(note, "Close find"));
+    d.assert_labelled(note);
+    d.assert_accessible(&d.note_ui());
+    d.keys(note, "key");
+    assert_eq!(body(&d), "api key: abc\nXsecond line!\nthe KEY again", "the search types into the bar, not the note");
+    assert!(d.has(note, "1 of 2"), "both places found");
+    d.press(note, Key::Enter, Modifiers::NONE);
+    assert!(d.has(note, "2 of 2"), "Enter goes to the next");
+    d.press(note, Key::Enter, Modifiers::NONE);
+    assert!(d.has(note, "1 of 2"), "and around to the first");
+    d.press(note, Key::Enter, shift);
+    assert!(d.has(note, "2 of 2"), "Shift+Enter goes back");
+    d.press(note, Key::F(3), shift);
+    assert!(d.has(note, "1 of 2"), "Shift+F3 too");
+    d.press(note, Key::F(3), Modifiers::NONE);
+    assert!(d.has(note, "2 of 2"), "F3 goes on");
+    d.click(note, "Previous match");
+    assert!(d.has(note, "1 of 2"));
+    d.click(note, "Next match");
+    assert!(d.has(note, "2 of 2"));
+    d.keys(note, "z");
+    assert!(d.has(note, "No matches"), "nothing has keyz");
+    d.press(note, Key::Backspace, Modifiers::NONE);
+    assert!(d.has(note, "1 of 2"));
+    d.press(note, Key::Enter, Modifiers::NONE);
+
+    // Escape closes the bar and leaves the match selected in the note: typing replaces it.
+    d.press(note, Key::Escape, Modifiers::NONE);
+    assert!(!d.has(note, "Next match"), "the bar closed");
+    d.keys(note, "code");
+    assert_eq!(body(&d), "api key: abc\nXsecond line!\nthe code again");
+    d.host.advance(Duration::from_millis(500));
+    d.frames(2);
+    assert_eq!(d.st.with(|v| v.list_notes()).expect("notes")[0].body, "api key: abc\nXsecond line!\nthe code again", "saved");
+
+    // The find bar opens with a few selected words to look for, and closes with its button.
+    d.press(note, Key::Home, ctrl);
+    d.press(note, Key::ArrowRight, Modifiers { shift: true, ..ctrl });
+    d.key(note, "f", true);
+    assert_eq!(d.value(note, "Find in note").as_deref(), Some("api"), "the selection is searched for");
+    assert!(d.has(note, "1 of 1"));
+    d.click(note, "Close find");
+    assert!(!d.has(note, "Next match"));
+
+    // On a Russian layout the F key types "а": Ctrl with it is still Ctrl+F.
+    let e = KeyEvent::press(Key::Character("а".into())).with_physical("KeyF").with_modifiers(ctrl).with_text(None);
+    d.host.send(HostEvent::Key(note, e));
+    d.frames(2);
+    assert!(d.has(note, "Next match"), "Ctrl+F by the key's place");
+    d.press(note, Key::Escape, Modifiers::NONE);
+
+    // Ctrl+N: another note of this color. Ctrl+W closes a note, saved. Ctrl+L locks.
+    let before = d.windows();
+    d.key(note, "n", true);
+    let second = *d.windows().iter().find(|w| !before.contains(w)).expect("Ctrl+N opened a note");
+    assert_eq!(d.st.with(|v| v.list_notes()).expect("notes").len(), 2);
+    d.frames(2);
+    d.keys(second, "typed and closed");
+    d.key(second, "w", true);
+    assert!(!d.windows().contains(&second), "Ctrl+W closed the note");
+    let notes = d.st.with(|v| v.list_notes()).expect("notes");
+    assert!(notes.iter().any(|n| n.body == "typed and closed"), "and saved it first");
+    d.key(note, "l", true);
+    d.frames(2);
+    assert_eq!(d.screen(), Screen::Unlock, "Ctrl+L locked the vault");
+    assert_eq!(d.windows(), vec![manager]);
+}
+
+/// Ctrl+F in the manager searches titles and texts; the other manager keys.
+#[test]
+fn the_manager_searches_notes_and_answers_its_keys() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (mut d, manager) = unlocked(&dir);
+    assert!(!d.has(manager, "Search notes"), "nothing to search with no notes");
+    write_note(&mut d, manager, "yellow", "Wi-Fi", "guest network: hunter2");
+    write_note(&mut d, manager, "pink", "Server", "staging api key\nrotate monthly");
+    write_note(&mut d, manager, "blue", "Bank", "nothing secret here");
+    d.show_manager();
+    d.frames(2);
+    assert!(d.has(manager, "Search notes"));
+    assert!(d.has(manager, "Ctrl+F search · Ctrl+N new note · Ctrl+L lock"));
+    d.assert_accessible(&d.manager_ui());
+    let listed = |d: &Driver| ["Wi-Fi", "Server", "Bank"].map(|t| d.has(manager, &format!("Open {t}")));
+    assert_eq!(listed(&d), [true, true, true]);
+
+    // Ctrl+F puts the caret in the search box; a title matches, in any case.
+    d.key(manager, "f", true);
+    d.keys(manager, "SERV");
+    assert_eq!(d.value(manager, "Search notes").as_deref(), Some("SERV"), "Ctrl+F focused the search");
+    assert_eq!(listed(&d), [false, true, false]);
+    // A note's text matches too.
+    d.key(manager, "f", true);
+    d.keys(manager, "hunter");
+    assert_eq!(d.value(manager, "Search notes").as_deref(), Some("hunter"), "Ctrl+F again selects what was typed");
+    assert_eq!(listed(&d), [true, false, false]);
+    assert!(d.has(manager, "3 notes · local vault"), "the count is still every note");
+    d.keys(manager, "zzz");
+    assert_eq!(listed(&d), [false, false, false]);
+    assert!(d.has(manager, "No notes match “hunterzzz”."));
+    // Escape shows every note again.
+    d.press(manager, Key::Escape, Modifiers::NONE);
+    assert_eq!(d.value(manager, "Search notes").as_deref(), Some(""));
+    assert_eq!(listed(&d), [true, true, true]);
+    // Enter opens the first note found.
+    d.keys(manager, "rotate");
+    assert_eq!(listed(&d), [false, true, false]);
+    d.press(manager, Key::Enter, Modifiers::NONE);
+    assert!(!d.manager_visible(), "the note took over from the manager");
+    let _ = d.note_window("Server");
+
+    // Ctrl+N starts a note, Ctrl+W hides the manager to the tray, Ctrl+L locks.
+    d.show_manager();
+    d.frames(2);
+    let before = d.windows().len();
+    d.key(manager, "n", true);
+    assert_eq!(d.windows().len(), before + 1, "Ctrl+N opened a new note");
+    assert_eq!(d.st.with(|v| v.list_notes()).expect("notes").len(), 4);
+    d.show_manager();
+    d.frames(2);
+    d.key(manager, "w", true);
+    assert!(!d.manager_visible(), "Ctrl+W hid the manager");
+    d.show_manager();
+    d.frames(2);
+    d.key(manager, "l", true);
+    d.frames(2);
+    assert_eq!(d.screen(), Screen::Unlock, "Ctrl+L locked");
+    assert_eq!(d.windows(), vec![manager]);
+    // Locked, Ctrl+N and Ctrl+F do nothing; typing a password is not a shortcut.
+    d.key(manager, "n", true);
+    assert_eq!(d.windows(), vec![manager]);
+    // Ctrl+Q quits, saving first.
+    d.key(manager, "q", true);
+    d.frames(2);
+    assert!(d.host.has_exited(), "Ctrl+Q quit");
 }

@@ -172,5 +172,14 @@
   "font.blurb": "Choose the typeface for every window. Your notes stay as they are.",
   "font.title": "Font",
   "textSize.blurb": "Makes the text in every window larger or smaller. Your notes stay as they are.",
-  "textSize.title": "Text size"
+  "textSize.title": "Text size",
+  "find.label": "Find in note",
+  "find.status": "{current} of {count}",
+  "find.none": "No matches",
+  "find.previous": "Previous match",
+  "find.next": "Next match",
+  "find.close": "Close find",
+  "notes.search": "Search notes",
+  "notes.noMatch": "No notes match “{query}”.",
+  "notes.keysHint": "Ctrl+F search · Ctrl+N new note · Ctrl+L lock"
 }
