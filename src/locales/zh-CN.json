@@ -172,5 +172,14 @@
   "font.blurb": "选择所有窗口使用的字体。你的便笺保持不变。",
   "font.title": "字体",
   "textSize.blurb": "放大或缩小所有窗口中的文字。你的便笺保持不变。",
-  "textSize.title": "文字大小"
+  "textSize.title": "文字大小",
+  "find.label": "在便签中查找",
+  "find.status": "{current}/{count}",
+  "find.none": "无匹配项",
+  "find.previous": "上一个匹配项",
+  "find.next": "下一个匹配项",
+  "find.close": "关闭查找",
+  "notes.search": "搜索便签",
+  "notes.noMatch": "没有与“{query}”匹配的便签。",
+  "notes.keysHint": "Ctrl+F 搜索 · Ctrl+N 新建便签 · Ctrl+L 锁定"
 }

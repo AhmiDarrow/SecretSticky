@@ -61,8 +61,59 @@ pub fn open(st: &St) {
     *st.manager.borrow_mut() = Some(win);
 }
 
+/// The search field of the unlocked manager, for Ctrl+F: set each time that screen is built.
+type SearchSlot = Rc<std::cell::RefCell<Option<TextField>>>;
+
+/// The notes `query` finds, in their order: its words in a title or in a note's text,
+/// ignoring case. An empty query finds every note.
+fn matching(st: &St, all: Vec<Preview>, query: &str) -> Vec<Preview> {
+    let query = query.trim();
+    if query.is_empty() {
+        return all;
+    }
+    // The texts are read from the unlocked vault for this search and dropped after it.
+    let in_text: std::collections::HashSet<String> = st
+        .with(|v| v.list_notes())
+        .map(|notes| notes.into_iter().filter(|n| crate::find::contains(&n.body, query)).map(|n| n.id).collect())
+        .unwrap_or_default();
+    all.into_iter().filter(|p| crate::find::contains(&p.title, query) || in_text.contains(&p.id)).collect()
+}
+
+/// The manager's keys, wherever the focus is: Ctrl+F searches the notes, Ctrl+N starts a
+/// note, Ctrl+L locks, Ctrl+W hides to the tray (as the window's X does) and Ctrl+Q quits.
+fn shortcut(st: &St, search: &SearchSlot, platform: remedy_ui::input::Platform, e: &remedy_ui::input::KeyEvent) -> bool {
+    let key = |letter: &str| crate::find::chord(e, platform, letter, false);
+    if !(key("f") || key("n") || key("l") || key("w") || key("q")) {
+        return false;
+    }
+    let (busy, unlocked) = remedy_ui::reactive::untrack(|| (st.busy.get(), st.screen.get() == Screen::Unlocked));
+    if busy {
+        // A password change or an unlock is running: its buttons are off, and so are these.
+        return true;
+    }
+    if key("q") {
+        state::quit(st);
+    } else if key("w") {
+        state::hide_manager(st);
+    } else if !unlocked {
+        return false;
+    } else if key("f") {
+        let field = search.borrow().clone();
+        if let Some(f) = field {
+            f.el().focus();
+            f.select_all();
+        }
+    } else if key("n") {
+        state::new_note(st, COLORS[0].0.clone());
+    } else {
+        state::lock_all(st);
+    }
+    true
+}
+
 fn build(st: &St, ui: &Ui, win: &Window) {
     let updater = Rc::new(crate::update::Updater::new());
+    let search: SearchSlot = Rc::default();
     let screen = st.screen;
     let use_recovery = Signal::new(false);
     let page = w::column(ui).grow(1.0).fill_width().layout(|l| l.min_height = remedy_ui::layout::Length::Px(0.0));
@@ -79,14 +130,15 @@ fn build(st: &St, ui: &Ui, win: &Window) {
     }).el();
     let (st4, ui4) = (st.clone(), ui.clone());
     let key = remedy_ui::show(ui, s(Screen::Recovery), move || centered(&ui4, recovery_key(&st4, &ui4))).el();
-    let (st5, ui5, upd) = (st.clone(), ui.clone(), updater.clone());
-    let unlocked = remedy_ui::show(ui, s(Screen::Unlocked), move || unlocked(&st5, &ui5, &upd)).el();
+    let (st5, ui5, upd, slot) = (st.clone(), ui.clone(), updater.clone(), search.clone());
+    let unlocked = remedy_ui::show(ui, s(Screen::Unlocked), move || unlocked(&st5, &ui5, &upd, &slot)).el();
     let (st6, ui6) = (st.clone(), ui.clone());
     let broken = remedy_ui::show(ui, s(Screen::Broken), move || centered(&ui6, broken(&st6, &ui6))).el();
     let _ = win;
     // The screens take turns in the page: the one shown fills it (the others take no room),
     // and scrolls inside rather than growing past a small window.
     let screen = |e: El| e.grow(1.0).layout(|l| l.min_height = remedy_ui::layout::Length::Px(0.0));
+    let (st7, platform) = (st.clone(), ui.platform());
     ui.root().child(
         page.child(screen(setup))
             .child(screen(unlock))
@@ -95,6 +147,8 @@ fn build(st: &St, ui: &Ui, win: &Window) {
             .child(screen(unlocked))
             .child(screen(broken)),
     );
+    // On the window itself, so the keys work with nothing focused too.
+    let _ = ui.root().on_key_capture(move |e| shortcut(&st7, &search, platform, e));
 }
 
 /// A card centered in the window, scrolling when the window is small.
@@ -134,7 +188,8 @@ fn error_line(st: &St, ui: &Ui) -> El {
     let u = ui.clone();
     let now = move || e.get().map(|m| m.text(l)).unwrap_or_default();
     remedy_ui::show(ui, move || e.with(Option::is_some), move || {
-        w::text(&u, now).variant("error").semantics(move || Semantics::new(Role::Status).label(now()))
+        // Selectable: an error is something to copy into a report.
+        w::text(&u, now).variant("error").selectable(true).semantics(move || Semantics::new(Role::Status).label(now()))
     }).el()
     .fill_width()
 }
@@ -352,7 +407,7 @@ fn broken(st: &St, ui: &Ui) -> El {
 }
 
 /// The unlocked manager.
-fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
+fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>, search_slot: &SearchSlot) -> El {
     let unit = ui.theme().spacing.unit;
     let panel = Signal::new(Panel::None);
     let busy = st.busy;
@@ -431,12 +486,50 @@ fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
         .child(w::text(ui, l.k("notes.new")).variant("muted"))
         .child(swatches.grow(1.0));
 
+    // Search (Ctrl+F): the notes whose title or text has the words; Enter opens the first,
+    // Escape shows every note again.
+    let query = Signal::new(String::new());
+    let shown = Signal::new(remedy_ui::reactive::untrack(|| notes.get()));
+    let search = w::text_input(ui, l.t("notes.search")).purpose(remedy_ui::view::InputPurpose::Search);
+    l.name_field(&search, "notes.search", Some("notes.search"));
+    *search_slot.borrow_mut() = Some(search.clone());
+    let s2 = search.clone();
+    let search = search.on_change(move || query.set(s2.value()));
+    let st_open = st.clone();
+    let search = search.on_submit(move || {
+        let first = remedy_ui::reactive::untrack(|| shown.with(|v| v.first().map(|p| p.id.clone())));
+        if let Some(id) = first {
+            state::open_note(&st_open, &id);
+        }
+    });
+    let (s3, st_find) = (search.clone(), st.clone());
+    let search_row = search
+        .el()
+        .fill_width()
+        .on_key(move |e| {
+            let clear = e.pressed && e.key == remedy_ui::input::Key::Escape && !s3.is_empty();
+            if clear {
+                s3.set_value("");
+                query.set(String::new());
+            }
+            clear
+        })
+        .bind(move || {
+            let (all, q) = (notes.get(), query.get());
+            remedy_ui::reactive::untrack(|| shown.set_if_changed(matching(&st_find, all, &q)));
+        });
+    // Nothing to search with no notes.
+    let row = search_row.clone();
+    let search_row = search_row.bind(move || {
+        let _ = row.clone().hidden(notes.with(Vec::is_empty));
+    });
+
     // The list.
     let list = w::column(ui).gap(unit * 1.5).fill_width();
     let (st2, ui2) = (st.clone(), ui.clone());
     let list = w::for_each(
         &list,
-        notes,
+        shown,
         // Keyed by what a row shows, so a rename or a new color rebuilds it.
         |p: &Preview| (p.id.clone(), p.title.clone(), p.color.as_css()),
         move |p| note_row(&st2, &ui2, p, panel),
@@ -444,6 +537,14 @@ fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
     let ui3 = ui.clone();
     let empty = remedy_ui::show(ui, move || notes.with(Vec::is_empty), move || {
         w::text(&ui3, l.k("notes.empty"))
+            .variant("muted")
+            .padding(Insets::symmetric(unit * 6.0, unit * 3.0))
+    }).el();
+
+    let ui4 = ui.clone();
+    let none_found = move || !notes.with(Vec::is_empty) && shown.with(Vec::is_empty);
+    let no_match = remedy_ui::show(ui, none_found, move || {
+        w::text(&ui4, move || l.tv("notes.noMatch", &[("query", query.get().trim())]))
             .variant("muted")
             .padding(Insets::symmetric(unit * 6.0, unit * 3.0))
     }).el();
@@ -457,9 +558,11 @@ fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
         .child(auto_lock.fill_width())
         .child(language.fill_width())
         .child(new_row)
+        .child(search_row)
         .child(error_line(st, ui))
         .child(list)
-        .child(empty.fill_width().align(Align::Center));
+        .child(empty.fill_width().align(Align::Center))
+        .child(no_match.fill_width().align(Align::Center));
 
     // Footer.
     let count = w::text(ui, move || l.count("manager.count", "count", notes.with(Vec::len) as f64));
@@ -468,6 +571,7 @@ fn unlocked(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>) -> El {
         .gap(unit * 0.5)
         .child(count.style(StylePatch::new().text_size(small)))
         .child(fineprint(ui, l.k("notes.trayHint")))
+        .child(fineprint(ui, l.k("notes.keysHint")))
         .child(fineprint(ui, move || l.tv("notes.copyClears", &[("seconds", &crate::note::COPY_KEEP.as_secs().to_string())])));
     let (s3, s4) = (st.clone(), st.clone());
     let hide = w::button(ui, l.k("notes.hide"), move || state::hide_manager(&s3)).variant("quiet").disabled(move || busy.get());
@@ -655,7 +759,7 @@ fn about(st: &St, ui: &Ui, updater: &Rc<crate::update::Updater>, panel: Signal<P
         .child(w::heading(ui, 2, l.k("about.title")))
         .child(w::text(ui, l.k("about.hello")).style(StylePatch::new().weight(600.0)))
         .child(fineprint(ui, l.k("about.blurb")))
-        .child(fineprint(ui, move || l.tv("about.version", &[("version", env!("CARGO_PKG_VERSION"))])))
+        .child(fineprint(ui, move || l.tv("about.version", &[("version", env!("CARGO_PKG_VERSION"))])).selectable(true))
         .child(links)
         .child(crate::update::section(st, ui, updater))
         .child(panel_footer(ui, l.k("about.localVault"), l.k("common.close"), panel));

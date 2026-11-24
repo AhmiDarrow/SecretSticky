@@ -1,17 +1,18 @@
 //! A note window: frameless, in the note's color, pinned on top when asked, saved as you
 //! type. The title bar holds the color swatches and the shipped app's actions.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::ops::Range;
 use std::rc::Rc;
 use std::time::Duration;
 
 use remedy_ui::WindowSpec;
 use remedy_ui::core::{Color, Insets, Point, Size};
 use remedy_ui::host::ResizeEdge;
-use remedy_ui::input::{Buttons, PointerPhase};
+use remedy_ui::input::{Buttons, Key, PointerPhase};
 use remedy_ui::reactive::Signal;
 use remedy_ui::style::{States, StylePatch};
-use remedy_ui::view::Align;
+use remedy_ui::view::{Align, Decoration};
 use remedy_ui_a11y::{Action, Role, Semantics};
 use remedy_ui_widgets_core::{self as w, Icon};
 use zeroize::Zeroizing;
@@ -25,6 +26,17 @@ pub const SAVE_DELAY: Duration = Duration::from_millis(400);
 pub const COPY_KEEP: Duration = Duration::from_secs(30);
 /// Where a new note starts (the vault's default) before it cascades.
 const DEFAULT_ORIGIN: (f64, f64) = (120.0, 120.0);
+
+/// A search in a note's text: which match is current, how many there are, and whether
+/// anything is searched for. `rev` changes with every search, so the marks follow matches
+/// that moved without their number changing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Found {
+    at: usize,
+    count: usize,
+    searching: bool,
+    rev: u64,
+}
 
 /// Edits not yet written to the vault.
 #[derive(Default)]
@@ -196,6 +208,116 @@ pub fn open(st: &St, dto: NoteDto) {
             })
         };
 
+        // Find in the note (Ctrl+F): every place the words occur is marked in the text, the
+        // current one more strongly, and selected, so closing the bar leaves the caret there.
+        let finding = Signal::new(false);
+        let found = Signal::new(Found::default());
+        let hits: Rc<RefCell<Vec<Range<usize>>>> = Rc::default();
+        let find_row: Rc<RefCell<Option<remedy_ui::El>>> = Rc::default();
+        // What is searched for may be a secret too: it is copied out like the note's text.
+        let find_field = field(w::text_input(ui, l.t("find.label")));
+        l.name_field(&find_field, "find.label", Some("find.label"));
+        let now_found = move || remedy_ui::reactive::untrack(|| found.get());
+        // Searches the text again. `from`: the match at or after that place becomes the
+        // current one; without it the current one keeps its number (the text was edited).
+        let scan: Rc<dyn Fn(Option<usize>)> = {
+            let (body, field, hits) = (body.clone(), find_field.clone(), hits.clone());
+            Rc::new(move |from| {
+                let text = Zeroizing::new(body.value());
+                let query = Zeroizing::new(field.value());
+                let list = crate::find::matches(&text, &query);
+                let old = now_found();
+                let at = match from {
+                    Some(place) => list.iter().position(|r| r.start >= place).unwrap_or(0),
+                    None => old.at.min(list.len().saturating_sub(1)),
+                };
+                let next = Found { at, count: list.len(), searching: !query.is_empty(), rev: old.rev.wrapping_add(1) };
+                *hits.borrow_mut() = list;
+                found.set(next);
+            })
+        };
+        // Selects the current match in the text and scrolls it into view.
+        let select: Rc<dyn Fn()> = {
+            let (body, hits) = (body.clone(), hits.clone());
+            Rc::new(move || {
+                let hit = hits.borrow().get(now_found().at).cloned();
+                if let Some(r) = hit {
+                    let _ = body.set_selection(r);
+                }
+            })
+        };
+        let step: Rc<dyn Fn(bool)> = {
+            let select = select.clone();
+            Rc::new(move |forward| {
+                let f = now_found();
+                if f.count == 0 {
+                    return;
+                }
+                let at = if forward { (f.at + 1) % f.count } else { (f.at + f.count - 1) % f.count };
+                found.set(Found { at, rev: f.rev.wrapping_add(1), ..f });
+                select();
+            })
+        };
+        let open_find: Rc<dyn Fn()> = {
+            let (body, field, row, scan, select) = (body.clone(), find_field.clone(), find_row.clone(), scan.clone(), select.clone());
+            Rc::new(move || {
+                // A few selected words are what to look for.
+                let sel = body.selection();
+                let picked = Zeroizing::new(body.value())
+                    .get(sel.clone())
+                    .filter(|s| !s.trim().is_empty() && !s.contains('\n') && s.chars().count() <= 80)
+                    .map(str::to_owned);
+                if let Some(words) = picked {
+                    field.set_value(&words);
+                }
+                if let Some(row) = row.borrow().as_ref() {
+                    let _ = row.clone().hidden(false);
+                }
+                finding.set(true);
+                scan(Some(sel.start));
+                select();
+                field.el().focus();
+                field.select_all();
+            })
+        };
+        let close_find: Rc<dyn Fn()> = {
+            let (body, field, row, hits) = (body.clone(), find_field.clone(), find_row.clone(), hits.clone());
+            Rc::new(move || {
+                finding.set(false);
+                hits.borrow_mut().clear();
+                found.set(Found { rev: now_found().rev.wrapping_add(1), ..Found::default() });
+                field.set_value("");
+                if let Some(row) = row.borrow().as_ref() {
+                    let _ = row.clone().hidden(true);
+                }
+                body.el().focus();
+            })
+        };
+        {
+            // Typing in the bar searches from where the caret was when it opened.
+            let (field, scan2, select) = (find_field.clone(), scan.clone(), select.clone());
+            let origin = Rc::new(Cell::new(0usize));
+            let (o2, b2) = (origin.clone(), body.clone());
+            let _ = find_field.el().on_focus_change(move |on| {
+                if on {
+                    o2.set(b2.selection().start);
+                }
+            });
+            let _ = field.on_change(move || {
+                scan2(Some(origin.get()));
+                select();
+            });
+            let step = step.clone();
+            let _ = find_field.clone().on_submit_with(move |m| step(!m.shift));
+            // Editing the note while the bar is open keeps the marks on the text.
+            let scan = scan.clone();
+            body.observe_text(move || {
+                if remedy_ui::reactive::untrack(|| finding.get()) {
+                    scan(None);
+                }
+            });
+        }
+
         // Title bar: the colors, then the actions. Drag anywhere that is not a control.
         let swatches = COLORS.iter().fold(w::wrap(ui).gap(0.0), |row, (c, _)| {
             let (pick, pending, schedule) = (c.clone(), pending2.clone(), schedule2.clone());
@@ -284,6 +406,60 @@ pub fn open(st: &St, dto: NoteDto) {
             .child(actions)
             .drag_region(move || mover.begin_move());
 
+        // The find bar, under the title bar while searching.
+        let find_bar = {
+            let (prev, next, shut) = (step.clone(), step.clone(), close_find.clone());
+            let small = ui.theme().type_scale.small;
+            let status_text = move || {
+                let f = found.get();
+                if !f.searching {
+                    String::new()
+                } else if f.count == 0 {
+                    l.t("find.none")
+                } else {
+                    l.tv("find.status", &[("current", &(f.at + 1).to_string()), ("count", &f.count.to_string())])
+                }
+            };
+            let status_now = w::text(ui, status_text)
+                .nowrap()
+                .style(move || StylePatch::new().foreground(ink(&color.get()).with_alpha(0.75)).text_size(small))
+                .semantics(move || Semantics::new(Role::Status).label(status_text()));
+            let field_el = find_field
+                .el()
+                .variant(move || if is_dark(&color.get()) { "note_dark" } else { "note_light" })
+                .style(move || StylePatch::new().foreground(ink(&color.get())).text_size(small))
+                .grow(1.0);
+            let row = w::row(ui)
+                .fill_width()
+                .gap(unit * 0.5)
+                .align(Align::Center)
+                .padding(crate::state::pad(unit, unit * 2.0, 0.0, unit * 3.0))
+                .child(field_el)
+                .child(status_now)
+                .child(tool(Icon::ChevronUp, "find.previous", Box::new(move || prev(false))))
+                .child(tool(Icon::ChevronDown, "find.next", Box::new(move || next(true))))
+                .child(tool(Icon::Close, "find.close", Box::new(move || shut())))
+                .semantics(move || Semantics::new(Role::Group).label(l.t("find.label")))
+                .hidden(true);
+            // The matches in the note's ink: faint for each, stronger for the current one
+            // (light ink on a dark note needs more of it to show).
+            let (body, hits) = (body.clone(), hits.clone());
+            let row = row.bind(move || {
+                let (f, c) = (found.get(), color.get());
+                let (each, current) = if is_dark(&c) { (0.24, 0.5) } else { (0.16, 0.38) };
+                let ink = ink(&c);
+                let marks = hits
+                    .borrow()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, r)| Decoration::highlight(r.clone()).colored(ink.with_alpha(if i == f.at { current } else { each })))
+                    .collect();
+                body.set_decorations(marks);
+            });
+            *find_row.borrow_mut() = Some(row.clone());
+            row
+        };
+
         {
             let (t, pending, schedule) = (title.clone(), pending2.clone(), schedule2.clone());
             let _ = title.clone().on_change(move || {
@@ -362,7 +538,44 @@ pub fn open(st: &St, dto: NoteDto) {
             let c = color.get();
             StylePatch::new().background(fill(&c)).foreground(ink(&c))
         };
-        ui.root().child(w::column(ui).grow(1.0).layout(fit).fill_width().style(note_style).child(bar).child(content).child(footer));
+        // The note's keys: find, and the title bar's actions without the mouse.
+        let keys = {
+            let (st, win, flush, open_find, close_find, step) =
+                (st.clone(), win.clone(), flush2.clone(), open_find.clone(), close_find.clone(), step.clone());
+            let platform = ui.platform();
+            move |e: &remedy_ui::input::KeyEvent| {
+                if !e.pressed || e.composing {
+                    return false;
+                }
+                let key = |letter: &str| crate::find::chord(e, platform, letter, false);
+                let open = remedy_ui::reactive::untrack(|| finding.get());
+                let plain = e.modifiers == remedy_ui::input::Modifiers::NONE;
+                let again = e.key == Key::F(3) && !e.modifiers.ctrl && !e.modifiers.alt && !e.modifiers.meta;
+                if key("f") {
+                    open_find();
+                } else if again || key("g") || crate::find::chord(e, platform, "g", true) {
+                    // F3 and Ctrl+G go to the next match, with Shift to the one before.
+                    if open { step(!e.modifiers.shift) } else { open_find() }
+                } else if open && plain && e.key == Key::Escape {
+                    close_find();
+                } else if key("n") {
+                    state::new_note(&st, remedy_ui::reactive::untrack(|| color.get()));
+                } else if key("s") {
+                    flush();
+                } else if key("w") {
+                    flush();
+                    win.close();
+                } else if key("l") {
+                    state::lock_all(&st);
+                } else {
+                    return false;
+                }
+                true
+            }
+        };
+        let page = w::column(ui).grow(1.0).layout(fit).fill_width().style(note_style).child(bar).child(find_bar).child(content).child(footer);
+        // On the window itself, so they work wherever the focus is, and with none.
+        let _ = ui.root().child(page).on_key_capture(keys);
         body.el().focus();
     });
     *window_slot.borrow_mut() = Some(window.clone());

@@ -17,6 +17,7 @@ mod error;
 mod vault;
 
 mod brand;
+mod find;
 mod fonts;
 mod lang;
 mod manager;

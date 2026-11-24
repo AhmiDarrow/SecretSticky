@@ -172,5 +172,14 @@
   "font.blurb": "Elige la tipografía de todas las ventanas. Tus notas no cambian.",
   "font.title": "Fuente",
   "textSize.blurb": "Agranda o reduce el texto de todas las ventanas. Tus notas no cambian.",
-  "textSize.title": "Tamaño del texto"
+  "textSize.title": "Tamaño del texto",
+  "find.label": "Buscar en la nota",
+  "find.status": "{current} de {count}",
+  "find.none": "Sin coincidencias",
+  "find.previous": "Coincidencia anterior",
+  "find.next": "Coincidencia siguiente",
+  "find.close": "Cerrar búsqueda",
+  "notes.search": "Buscar notas",
+  "notes.noMatch": "Ninguna nota coincide con «{query}».",
+  "notes.keysHint": "Ctrl+F buscar · Ctrl+N nueva nota · Ctrl+L bloquear"
 }
