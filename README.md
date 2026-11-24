@@ -45,6 +45,8 @@ RemedyUI is not public yet. SecretSticky is its proof that it is ready for real,
 | **Crypto** | Argon2id (64 MiB, t=3) + XChaCha20-Poly1305 AEAD |
 | **Keys** | Stable content key — change password without re-encrypting notes or killing recovery |
 | **Notes** | Multiple colored stickies (incl. black & dark green); the pin keeps a note on top and shows when it is on; long notes scroll (wheel, touchpad, middle-click autoscroll) |
+| **Search** | Ctrl+F in a note finds text in it (every match marked; Enter, F3 and Shift+F3 move between them). Ctrl+F in the manager finds notes by title or text |
+| **Keyboard** | In a note: Ctrl+N new note, Ctrl+W close, Ctrl+S save now, Ctrl+L lock. In the manager: Ctrl+N new note, Ctrl+L lock, Ctrl+W hide to tray, Ctrl+Q quit. The usual text keys work on every keyboard layout |
 | **Tray** | New note · Show manager · Open all · Lock · Quit |
 | **UX** | Single instance (second launch focuses manager); close manager → tray; every sticky has **New note / Manager / Lock** |
 | **Clipboard** | Copy secrets with auto-clear (default 30s) |

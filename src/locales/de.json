@@ -172,5 +172,14 @@
   "font.blurb": "Wählen Sie die Schrift für alle Fenster. Ihre Notizen bleiben unverändert.",
   "font.title": "Schriftart",
   "textSize.blurb": "Macht den Text in allen Fenstern größer oder kleiner. Ihre Notizen bleiben unverändert.",
-  "textSize.title": "Textgröße"
+  "textSize.title": "Textgröße",
+  "find.label": "In Notiz suchen",
+  "find.status": "{current} von {count}",
+  "find.none": "Keine Treffer",
+  "find.previous": "Vorheriger Treffer",
+  "find.next": "Nächster Treffer",
+  "find.close": "Suche schließen",
+  "notes.search": "Notizen durchsuchen",
+  "notes.noMatch": "Keine Notiz passt zu „{query}“.",
+  "notes.keysHint": "Strg+F suchen · Strg+N neue Notiz · Strg+L sperren"
 }

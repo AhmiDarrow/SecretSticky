@@ -172,5 +172,14 @@
   "font.blurb": "すべてのウィンドウの書体を選びます。メモの内容は変わりません。",
   "font.title": "フォント",
   "textSize.blurb": "すべてのウィンドウの文字を大きくまたは小さくします。メモの内容は変わりません。",
-  "textSize.title": "文字サイズ"
+  "textSize.title": "文字サイズ",
+  "find.label": "付箋内を検索",
+  "find.status": "{current}/{count}",
+  "find.none": "一致なし",
+  "find.previous": "前の一致",
+  "find.next": "次の一致",
+  "find.close": "検索を閉じる",
+  "notes.search": "付箋を検索",
+  "notes.noMatch": "「{query}」に一致する付箋はありません。",
+  "notes.keysHint": "Ctrl+F 検索 · Ctrl+N 新しい付箋 · Ctrl+L ロック"
 }
