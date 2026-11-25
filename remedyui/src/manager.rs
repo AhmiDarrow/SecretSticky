@@ -10,8 +10,8 @@ use remedy_ui::reactive::Signal;
 use remedy_ui::style::StylePatch;
 use remedy_ui::view::{Align, Justify};
 use remedy_ui::{El, TextField, Ui, Window, WindowSpec};
-use remedy_ui_a11y::{Action, Role, Semantics};
-use remedy_ui_widgets_core::{self as w, DialogButton};
+use remedy_ui::a11y::{Action, Role, Semantics};
+use remedy_ui::widgets::{self as w, DialogButton};
 use zeroize::Zeroizing;
 
 use crate::error::AppResult;
@@ -616,7 +616,7 @@ pub fn swatch(
         let center = Point::new(cx.size.width / 2.0, cx.size.height / 2.0);
         let circle = |r: f32| remedy_ui::core::Rect::new(center.x - r, center.y - r, center.x + r, center.y + r);
         let r = dot / 2.0;
-        cx.list.fill_rounded(circle(r), remedy_ui::core::CornerRadii::all(r), remedy_ui_paint::Brush::Solid(color));
+        cx.list.fill_rounded(circle(r), remedy_ui::core::CornerRadii::all(r), remedy_ui::paint::Brush::Solid(color));
         cx.list.border(circle(r), remedy_ui::core::CornerRadii::all(r), if dot > 20.0 { 2.0 } else { 1.0 }, edge);
         if on {
             cx.list.border(circle(r + 2.5), remedy_ui::core::CornerRadii::all(r + 2.5), 2.0, picked);
@@ -656,7 +656,7 @@ fn note_row(st: &St, ui: &Ui, p: &Preview, panel: Signal<Panel>) -> El {
         cx.list.fill_rounded(
             remedy_ui::core::Rect::new(c.x - r, c.y - r, c.x + r, c.y + r),
             remedy_ui::core::CornerRadii::all(r),
-            remedy_ui_paint::Brush::Solid(color),
+            remedy_ui::paint::Brush::Solid(color),
         );
     })
     .width(14.0)

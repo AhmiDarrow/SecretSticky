@@ -13,8 +13,8 @@ use remedy_ui::input::{Buttons, Key, PointerPhase};
 use remedy_ui::reactive::Signal;
 use remedy_ui::style::{States, StylePatch};
 use remedy_ui::view::{Align, Decoration};
-use remedy_ui_a11y::{Action, Role, Semantics};
-use remedy_ui_widgets_core::{self as w, Icon};
+use remedy_ui::a11y::{Action, Role, Semantics};
+use remedy_ui::widgets::{self as w, Icon};
 use zeroize::Zeroizing;
 
 use crate::state::{self, COLORS, Debounce, OpenNote, St, checked, fill, ink, is_dark, window_title};
@@ -502,7 +502,7 @@ pub fn open(st: &St, dto: NoteDto) {
             // Six dots in a triangle against the corner.
             for (i, j) in [(1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (1, 3)] {
                 let (x, y) = (cx.size.width - 4.0 * i as f32 - 1.0, cx.size.height - 4.0 * j as f32 - 1.0);
-                cx.list.fill_rect(remedy_ui::core::Rect::new(x, y, x + 2.0, y + 2.0), remedy_ui_paint::Brush::Solid(c));
+                cx.list.fill_rect(remedy_ui::core::Rect::new(x, y, x + 2.0, y + 2.0), remedy_ui::paint::Brush::Solid(c));
             }
         })
         .width(16.0)
