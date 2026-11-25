@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use remedy_ui::reactive::Signal;
 use remedy_ui::{El, Ui};
-use remedy_ui_services_update::{self as up, Apply, BannerText, Feed, Release, UpdateConfig, UpdateState};
-use remedy_ui_widgets_core as w;
+use remedy_ui::update::{self as up, Apply, BannerText, Feed, Release, UpdateConfig, UpdateState};
+use remedy_ui::widgets as w;
 
 use crate::state::St;
 
