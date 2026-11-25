@@ -2,7 +2,7 @@
 //! manager and gate, and the tray icon, decoded from the same PNGs the Tauri app ships.
 
 use remedy_ui::host::{TrayImage, WindowIcon};
-use remedy_ui_paint::Image;
+use remedy_ui::paint::Image;
 
 /// `src/assets/app-mark.png` (128 px), shown in the header, the gate and About.
 const MARK: &[u8] = include_bytes!("../../src/assets/app-mark.png");
@@ -15,8 +15,8 @@ const ICON_64: &[u8] = include_bytes!("../../src-tauri/icons/64x64.png");
 const ICON_256: &[u8] = include_bytes!("../../src-tauri/icons/128x128@2x.png");
 
 thread_local! {
-    static MARK_IMAGE: Option<Image> = remedy_ui_media_image::decode(MARK, None).ok().map(|d| d.image);
-    static WINDOW_ICON: Option<WindowIcon> = remedy_ui_media_image::decode(ICON_256, None)
+    static MARK_IMAGE: Option<Image> = remedy_ui::image::decode(MARK, None).ok().map(|d| d.image);
+    static WINDOW_ICON: Option<WindowIcon> = remedy_ui::image::decode(ICON_256, None)
         .ok()
         .and_then(|d| WindowIcon::new(d.image.width, d.image.pixels.to_vec()).filter(|_| d.image.width == d.image.height));
 }
@@ -34,7 +34,7 @@ pub fn mark() -> Option<Image> {
 /// The tray icon for a tray drawn at `px` pixels: the 64 px artwork on dense screens.
 pub fn tray_icon(px: u32) -> Option<TrayImage> {
     let bytes = if px > 32 { ICON_64 } else { ICON_32 };
-    let d = remedy_ui_media_image::decode(bytes, None).ok()?;
+    let d = remedy_ui::image::decode(bytes, None).ok()?;
     let img = d.image;
     (img.width == img.height).then(|| TrayImage { size: img.width, rgba: img.pixels.to_vec() })
 }

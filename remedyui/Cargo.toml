@@ -1,6 +1,6 @@
 [package]
 name = "secretsticky"
-version = "1.0.5"
+version = "1.0.6"
 description = "Encrypted sticky notes, on RemedyUI"
 edition = "2024"
 rust-version = "1.96"
@@ -16,13 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # RemedyUI (sibling checkout).
-remedy-ui = { path = "../../Projects/RemedyUI/crates/remedy-ui" }
-remedy-ui-widgets-core = { path = "../../Projects/RemedyUI/crates/remedy-ui-widgets-core" }
-remedy-ui-themes = { path = "../../Projects/RemedyUI/crates/remedy-ui-themes" }
-remedy-ui-services-update = { path = "../../Projects/RemedyUI/crates/remedy-ui-services-update" }
-remedy-ui-paint = { path = "../../Projects/RemedyUI/crates/remedy-ui-paint" }
-remedy-ui-a11y = { path = "../../Projects/RemedyUI/crates/remedy-ui-a11y" }
-remedy-ui-media-image = { path = "../../Projects/RemedyUI/crates/remedy-ui-media-image" }
+remedy-ui = { path = "../../Projects/RemedyUI/crates/remedy-ui", features = ["image", "update"] }
 # The shipped language catalogs and settings.json code (edition 2021, compiled unchanged).
 secretsticky-shipped-i18n = { path = "shipped-i18n" }
 # The vault, shared with the Tauri app (same versions as its lockfile).
@@ -40,9 +34,8 @@ chacha20poly1305 = "=0.10.1"
 hex = "=0.4.3"
 
 [dev-dependencies]
+remedy-ui = { path = "../../Projects/RemedyUI/crates/remedy-ui", features = ["image", "update", "devtools", "headless"] }
 tempfile = "=3.27.0"
-remedy-ui-bridge-headless = { path = "../../Projects/RemedyUI/crates/remedy-ui-bridge-headless" }
-remedy-ui-devtools = { path = "../../Projects/RemedyUI/crates/remedy-ui-devtools" }
 
 # Argon2 (64 MiB, 3 passes) is slow unoptimized; tests unlock vaults.
 [profile.dev.package.argon2]

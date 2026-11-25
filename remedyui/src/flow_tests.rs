@@ -11,7 +11,7 @@ use remedy_ui::host::accesskit::{Action, ActionRequest, Node, NodeId, TreeId};
 use remedy_ui::host::{AccessibilityEvent, Host, HostEvent, TrayEvent, WindowId};
 use remedy_ui::input::{Key, KeyEvent, Modifiers};
 use remedy_ui::{App, AppConfig, GeometryStore, Runner};
-use remedy_ui_bridge_headless::HeadlessHost;
+use remedy_ui::headless::HeadlessHost;
 
 use crate::state::{Screen, St};
 
@@ -135,9 +135,9 @@ impl Driver {
 
     /// The engine's accessibility check finds nothing in the window.
     fn assert_accessible(&self, ui: &remedy_ui::Ui) {
-        let found: Vec<String> = remedy_ui_devtools::audit(ui)
+        let found: Vec<String> = remedy_ui::devtools::audit(ui)
             .iter()
-            .map(|p| format!("{} [{}]", p.message(), ui.element(p.element).info().map(|i| remedy_ui_devtools::describe(&i)).unwrap_or_default()))
+            .map(|p| format!("{} [{}]", p.message(), ui.element(p.element).info().map(|i| remedy_ui::devtools::describe(&i)).unwrap_or_default()))
             .collect();
         assert!(found.is_empty(), "{found:#?}");
     }

@@ -3,7 +3,7 @@
 
 use remedy_ui::core::Color;
 use remedy_ui::style::{States, StylePatch, StyleSheet, Theme};
-use remedy_ui_themes::Palette;
+use remedy_ui::themes::Palette;
 
 /// The shipped app's colors (`:root` in `src/App.css`).
 pub const BRAND: Palette = Palette {
@@ -35,7 +35,7 @@ pub fn theme() -> Theme {
 /// The SecretSticky theme with `family` (one of [`crate::fonts::CHOICES`]) for every text,
 /// headings included.
 pub fn theme_with(family: &str, text_scale: f32) -> Theme {
-    let mut t = remedy_ui_themes::theme(&BRAND);
+    let mut t = remedy_ui::themes::theme(&BRAND);
     // The person's text size: every text, as Windows' own text-size setting does.
     t.text_scale = text_scale;
     // The chosen typeface first; by default the shipped one (`font-family: "Inter", system-ui,
@@ -82,7 +82,7 @@ const INSET: &str = "#111214";
 /// The Remedy widget sheet on the SecretSticky theme, with the shipped app's surfaces: cards
 /// on the panel color (buttons keep the lighter one), an inset well, and success text.
 pub fn sheet(t: &Theme) -> StyleSheet {
-    let mut s = remedy_ui_themes::sheet(t);
+    let mut s = remedy_ui::themes::sheet(t);
     let c = &t.colors;
     s.rule("card", None, States::NONE, StylePatch::new().background(c.panel));
     let inset = Color::from_hex(INSET).unwrap_or(c.bg);
